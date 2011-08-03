@@ -1,0 +1,20 @@
+application: biogeomancer
+version: github
+runtime: python
+api_version: 1
+
+builtins:
+- datastore_admin: on
+- appstats: on
+
+handlers:
+
+- url: /js
+  static_dir: js
+
+- url: /hooks/.*
+  script: app.py
+   
+- url: /.*
+  script: app.py
+  login: admin

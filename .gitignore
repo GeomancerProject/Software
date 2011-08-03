@@ -1,0 +1,33 @@
+# Production ini #
+##################
+production.ini
+
+# Google Prediction API #
+########################
+googlekey
+
+# Compiled source #
+###################
+*.pyc
+*.class
+
+# Logs and databases #
+######################
+*.log
+*.sql
+*.sqlite
+
+# IDE files #
+#############
+*.idea
+*.project
+*.pydevproject
+*.iml
+*.settings
+
+
+# EMACS temp files #
+####################
+*.*~
+#*
+.#*
