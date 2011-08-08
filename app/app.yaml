@@ -1,0 +1,37 @@
+application: geo-mancer
+version: alpha
+runtime: python
+api_version: 1
+
+inbound_services:
+- mail
+
+builtins:
+- datastore_admin: on
+- remote_api: on
+- deferred: on
+
+handlers:
+
+- url: /api/.*
+  script: app.py
+
+# GitHub service hooks
+- url: /service-hooks/post-receive
+  script: github_service_hooks.py 
+ 
+- url: /admin/.*
+  script: app.py
+  login: admin
+
+- url: /mapreduce(/.*)?
+  script: mapreduce/main.py
+  login: admin
+
+- url: /_ah/mail/.+ 
+  script: inbound_mail_handler.py
+  login: admin
+
+- url: /.*
+  script: app.py
+
