@@ -43,8 +43,8 @@ class PostReceiveHandler(common.BaseHandler):
             body += '\n%s (author)' % c['author']['name']
             body += '\n%s\n\n' % c['timestamp'] # TODO: user friendly date
         mail.send_mail(
-            sender="GitHub <commits@vert-net.appspotmail.com>",
-            to="vertnet-developers@googlegroups.com",
+            sender="GitHub <commits@geo-mancer.appspotmail.com>",
+            to="geomancer-developers@googlegroups.com",
             subject=title,
             body=body)     
 
