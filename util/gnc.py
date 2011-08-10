@@ -85,8 +85,5 @@ def main():
         print 'FILES: %s FEATURES: %s' % (filecount,featurecount)
         return
 
-    if command=='gnc2gm':
-        reader = csv.DictReader()
-
 if __name__ == "__main__":
     main()
