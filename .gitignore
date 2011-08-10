@@ -1,7 +1,3 @@
-# Context Switch #
-##################
-context.txt
-
 # Production ini #
 ##################
 production.ini
@@ -13,13 +9,17 @@ googlekey
 # Compiled source #
 ###################
 *.pyc
-*.class
+*.bak
 
 # Logs and databases #
 ######################
+*.csv
 *.log
 *.sql
+*.sqlite3.db
 *.sqlite
+bulkloader-log*
+bulkloader-progress*
 
 # IDE files #
 #############
@@ -27,11 +27,16 @@ googlekey
 *.project
 *.pydevproject
 *.iml
-*.settings
 
-
-# EMACS temp files #
-####################
+# OS files #
+############
+.DS_Store
 *.*~
-#*
 .#*
+*#*
+
+
+context.txt
+csvsplit.py
+clean_files.sh
+
