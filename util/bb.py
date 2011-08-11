@@ -30,6 +30,10 @@ class Point(object):
 class BoundingBox(object):
     """A degree-based geographic bounding box independent of a coordinate reference system."""
 
+    @classmethod
+    def create(cls, xmin, ymax, xmax, ymin):
+        return cls(Point(xmin, ymax), Point(xmax, ymin))
+
     def __init__(self, nw, se):
         self._nw = nw
         self._se = se
@@ -52,6 +56,7 @@ class BoundingBox(object):
         return str(self.__dict__)
     
     def intersection(self,bb):
+        """Returns a BoundingBox created from an intersection or None."""
         my_n=self.nw.get_lat()
         my_s=self.se.get_lat()
         my_w=self.nw.get_lng()

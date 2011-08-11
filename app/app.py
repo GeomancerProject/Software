@@ -37,6 +37,8 @@ from google.appengine.datastore import entity_pb
 # Datastore Plus imports
 from ndb import query
 
+from util import bb
+
 from models import Feature, FeatureIndex
 try:
     appid = os.environ['APPLICATION_ID']
@@ -65,8 +67,9 @@ class ApiHandler(BaseHandler):
         source = self.request.get('source', None)
         limit = self.request.get_range('limit', min_value=1, max_value=100, default=10)
         offset = self.request.get_range('offset', min_value=0, default=0)
-        results = FeatureIndex.search(limit, offset, keywords=keywords, 
+        features = FeatureIndex.search(limit, offset, keywords=keywords, 
                                       category=category, source=source)
+        results = [
         logging.info(str(results))
         self.response.headers["Content-Type"] = "application/json"
         self.response.out.write(
