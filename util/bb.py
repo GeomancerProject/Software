@@ -126,8 +126,15 @@ class BoundingBox(object):
         return -1
 
     @classmethod
+    def get_intersecting(cls, bb_list):
+        pass # TODO
+
+    @classmethod
     def intersect_all(cls, bb_list):
-        if len(bb_list)<2:
+        n = len(bb_list)
+        if n == 1:
+            return bb_list[0]
+        if n == 0:
             return None
         result = bb_list.pop(0)
         for bb in bb_list:
