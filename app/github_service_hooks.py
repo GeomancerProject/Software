@@ -36,7 +36,7 @@ class PostReceiveHandler(common.BaseHandler):
         payload = self.request.get('payload')
         logging.info('GitHub post receive payload: %s' % payload)
         json = simplejson.loads(payload)
-        title = '[%s] GitHub push' % json['repository']['name']
+        title = '[%s] GitHub push' % json['repository']['url'].split('.com/')[1]
         body = 'The following commits were just pushed:\n\n'
         for c in json['commits']:
             body += '%s\n%s' % (c['message'], c['url'])
