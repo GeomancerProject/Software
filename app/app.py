@@ -60,24 +60,63 @@ class BaseHandler(webapp.RequestHandler):
         self.response.out.write(open(path, 'r').read())
 
 class ApiHandler(BaseHandler):
+
+    def tokenize(self, seq, uniques=set()):
+        n = len(seq)
+        if n == 0:
+            return
+        if n == 1:
+            uniques.add(seq[0].lower())
+            return uniques
+        uniques.add(reduce(lambda x,y: '%s %s' % (x.lower(), y.lower()), seq))
+        for i in range(n):
+            tmp = list(seq)
+            tmp.pop(i)
+            self.tokenize(tmp, uniques)
+        return uniques
+
     def get(self):
-        keywords = [x.lower() for x in self.request.get('q', '').split(',') if x]
-        logging.info('keywords=%s' % str(keywords))
+        keywords = []
+        name = self.request.get('feature', None)
         category = self.request.get('type', None)
         source = self.request.get('source', None)
         limit = self.request.get_range('limit', min_value=1, max_value=100, default=10)
         offset = self.request.get_range('offset', min_value=0, default=0)
+        
+        if name:
+            name = name.replace(',', '')
+            logging.info('name=%s' % name)
+            feature = Feature.get_by_name(name)
+            if feature:
+                self.response.headers["Content-Type"] = "application/json"
+                self.response.out.write(feature.j)
+                return
+            else:
+                keywords = self.tokenize(name.replace(',', ' ').split(), set())
+                logging.info('keywords=%s' % str(keywords))
+        
         features = FeatureIndex.search(
             limit, offset, keywords=keywords, category=category, source=source)
-        bounding_boxes = []`
-        for f in features:
-            data = simplejson.loads(f.json)
-            bounding_boxes.append(BoundingBox(data.minx, data.maxy, data.maxx, data.miny))
 
-        logging.info(str(results))
+        bounding_boxes = []
+        results = []
+        for f in features:
+            data = simplejson.loads(f.j)
+            results.append(data)
+            bounding_boxes.append(BoundingBox.create(
+                    data['minx'], data['maxy'], data['maxx'], data['miny']))
+            
+        if not BoundingBox.intersect_all(bounding_boxes):
+            results = []
+        
+        if len(keywords) > 0:
+            result = dict(results=results, exact_match=False)
+        else:
+            result = results
+
         self.response.headers["Content-Type"] = "application/json"
-        self.response.out.write(
-            simplejson.dumps([simplejson.loads(x.j) for x in results]))        
+        self.response.out.write(simplejson.dumps(result))
+            
 
 application = webapp.WSGIApplication(
     [('/gaz/api', ApiHandler),], debug=True)

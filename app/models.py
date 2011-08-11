@@ -30,29 +30,47 @@ try:
 except:
     pass
 
-class Feature(model.Model): 
-    """Feature model."""
-    name = model.StringProperty('n', required=True)
-    j = model.TextProperty('j', required=True)
+class Feature(model.Model): # id=name
+    j = model.TextProperty('j', required=True) # json
+
     @classmethod
     def create(cls, row):
-        """Creates Feature from name, category, point, bounding box."""
-        return Feature(
-            id=fid,
-            name=name,
-            category=category,
-            json=simplejson.dumps(row))
-
-class FeatureIndex(model.Model): # parent=Feature
-    """FetureIndex model for searching Feature entities."""
-    k = model.StringProperty('k', repeated=True) # keywords
-    s = model.StringProperty('s', repeated=True) # source
-    c = model.StringProperty('c', required=True) # category (type)
+        return Feature(id=row['name'], j=simplejson.dumps(row))
 
     @classmethod
-    def create(cls, fid, keywords):
-        key = model.Key('FeatureIndex', parent=model.Key('Feature', fid))                        
-        return FeatureIndex(key=key, keywords=keywords)
+    def key_from_name(cls, name):
+        return model.Key(
+            'Feature', 
+            unicode('-'.join(name.replace(',', ' ').lower().split())))
+
+    @classmethod
+    def get_by_name(cls, name):
+        return cls.key_from_name(name).get()
+
+    @classmethod
+    def get_by_name_multi(cls, names):
+        return model.get_multi([cls.key_from_name(name) for name in names])
+
+class FeatureIndex(model.Model): # parent=Feature, id=feature_name
+    n = model.StringProperty('n', required=True) # name
+    s = model.StringProperty('s', repeated=True) # source
+    c = model.StringProperty('c', required=True) # category (type)
+    k = model.StringProperty('k', repeated=True) # keywords
+
+    @classmethod
+    def key_from_name(cls, name):
+        parent = Feature.key_from_name(name)
+        return model.Key('FeatureIndex', parent.id(), parent=parent) 
+
+    @classmethod
+    def create(cls, row, keywords):
+        parent = Feature.key_from_name(row['name'])
+        return FeatureIndex(
+            parent=parent,
+            n=row['name'],
+            s=row['source'],
+            c=row['type'],
+            k=keywords)
 
     @classmethod
     def search(cls, limit, offset, keywords=[], category=None, source=None):

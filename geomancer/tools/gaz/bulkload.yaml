@@ -20,17 +20,9 @@ transformers:
   
   property_map:
     - property: __key__
-      external_name: id
-      export_transform: transform.key_id_or_name_as_string
-    
-    - property: n #name
       external_name: name
-      import_transform: transform.none_if_empty(str)
-
-    - property: c #category
-      external_name: type
-      import_transform: transform.none_if_empty(str)
-
+      import_transform: bulkload_helper.create_feature_key()
+    
     - property: j #json
       external_name: id
       import_transform: bulkload_helper.get_feature_json()
@@ -44,17 +36,22 @@ transformers:
   
   property_map:
     - property: __key__
-      external_name: id
+      external_name: name
       import_transform: bulkload_helper.create_feature_index_key()
                 
     - property: c #category
       external_name: type
       import_transform: "lambda x: x.lower()"
 
+
     - property: s #source
       external_name: source
       import_transform: "lambda x: x.lower()"
-             
+
+    - property: n #name
+      external_name: name
+      import_transform: "lambda x: x.lower()"
+
     - property: k #keywords
       external_name: name
       import_transform: bulkload_helper.get_keywords()

@@ -30,10 +30,12 @@ from google.appengine.ext.db import Expando
 from ndb import model
 from ndb import query
 
+from models import Feature, FeatureIndex
 
 def get_feature_json():
     def wrapper(value, bulkload_state):        
         d = bulkload_state.current_dictionary
+        logging.info(str(d))
         feature = dict()
         for key,val in d.iteritems():
             if key == '__record_number__':
@@ -47,11 +49,16 @@ def get_feature_json():
         return simplejson.dumps(feature)        
     return wrapper
 
+def create_feature_key():
+    def wrapper(name): 
+        return Feature.key_from_name(name).id()
+    return wrapper
+
 def create_feature_index_key():
-    def wrapper(value, bulkload_state): 
-        return transform.create_deep_key(
-            ('Feature', 'id'),
-            ('FeatureIndex', 'id'))(value, bulkload_state)
+    def wrapper(name): 
+        key = FeatureIndex.key_from_name(name)
+        path = reduce(lambda x,y: x+y, key.pairs())
+        return datastore.Key.from_path(*path)
     return wrapper
 
 def tokenize(input, uniques=set()):
