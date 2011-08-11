@@ -37,23 +37,38 @@ class BoundingBox(object):
     def __init__(self, nw, se):
         self._nw = nw
         self._se = se
-
+    
     def get_nw(self):
         return self._nw
     nw = property(get_nw)
-
+    
     def get_se(self):
         return self._se
     se = property(get_se)
-
+    
     def isvalid(self):
         if nw.isvalid:
             if se.isvalid:
                 return True
         return False
 
+    @classmethod
+    def create(cls, xmin, ymax, xmax, ymin):
+        return cls(Point(xmin, ymax), Point(xmax, ymin))
+    
     def __str__(self):
         return str(self.__dict__)
+
+    @classmethod
+    def intersect_all(cls, bb_list):
+        if len(bb_list)<2:
+            return None
+        result = bb_list.pop(0)
+        for bb in bb_list:
+            result = bb.intersection(result)
+            if result is None:
+                return None
+        return result
     
     def intersection(self,bb):
         """Returns a BoundingBox created from an intersection or None."""

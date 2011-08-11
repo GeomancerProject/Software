@@ -28,6 +28,17 @@ from util.bb import *
 
 class BBTest(unittest.TestCase):
     def test_intersection(self):
+        bb0=BoundingBox.create(0,10,10,0)
+        bb1=BoundingBox.create(5,15,15,5)
+        bb2=BoundingBox.create(7,8,8,7)
+        bb_list = [bb0,bb1,bb2]
+        i = BoundingBox.intersect_all(bb_list)
+        self.assertEqual(i.nw.get_lng(), 7)
+        self.assertEqual(i.nw.get_lat(), 8)
+        self.assertEqual(i.se.get_lng(), 8)
+        self.assertEqual(i.se.get_lat(), 7)
+        print 'nw: %s se: %s' % (i.nw, i.se)
+        
         nwcorner = Point(0, 10)
         secorner = Point(10, 0)
         bb1=BoundingBox(nwcorner,secorner)
