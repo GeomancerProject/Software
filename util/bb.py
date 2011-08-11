@@ -30,10 +30,6 @@ class Point(object):
 class BoundingBox(object):
     """A degree-based geographic bounding box independent of a coordinate reference system."""
 
-    @classmethod
-    def create(cls, xmin, ymax, xmax, ymin):
-        return cls(Point(xmin, ymax), Point(xmax, ymin))
-
     def __init__(self, nw, se):
         self._nw = nw
         self._se = se

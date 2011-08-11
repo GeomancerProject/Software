@@ -37,7 +37,7 @@ from google.appengine.datastore import entity_pb
 # Datastore Plus imports
 from ndb import query
 
-from util import bb
+from util.bb import BoundingBox
 
 from models import Feature, FeatureIndex
 try:
@@ -67,9 +67,13 @@ class ApiHandler(BaseHandler):
         source = self.request.get('source', None)
         limit = self.request.get_range('limit', min_value=1, max_value=100, default=10)
         offset = self.request.get_range('offset', min_value=0, default=0)
-        features = FeatureIndex.search(limit, offset, keywords=keywords, 
-                                      category=category, source=source)
-        results = [
+        features = FeatureIndex.search(
+            limit, offset, keywords=keywords, category=category, source=source)
+        bounding_boxes = []`
+        for f in features:
+            data = simplejson.loads(f.json)
+            bounding_boxes.append(BoundingBox(data.minx, data.maxy, data.maxx, data.miny))
+
         logging.info(str(results))
         self.response.headers["Content-Type"] = "application/json"
         self.response.out.write(
