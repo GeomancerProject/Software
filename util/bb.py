@@ -27,6 +27,39 @@ class Point(object):
     def __str__(self):
         return str(self.__dict__)
 
+    def __eq__(self, other):
+        if not isinstance(other, Point):
+            return NotImplemented
+        if self.lat != other.lat:
+            return NotImplemented
+        if self.lng != other.lng:
+            return NotImplemented
+        return True
+
+    def __gt__(self, other):
+        if self._lat > other._lat:
+            return True
+        if self._lng > other._lng:
+            return True
+        return False
+
+    def __lt__(self, other):
+        if self._lat < other._lat:
+            return True
+        if self._lng < other._lng:
+            return True
+        return False
+
+    def __cmp__(self, other):
+        if self.__gt__(other):
+            return 1
+        if self.__lt__(other):
+            return -1
+        return 0
+
+    def __hash__(self):
+        return hash('%s,%s' % (self._lat, self._lng))
+
 class BoundingBox(object):
     """A degree-based geographic bounding box independent of a coordinate reference system."""
 
@@ -42,6 +75,18 @@ class BoundingBox(object):
         return self._se
     se = property(get_se)
     
+    def get_n(self):
+        return self._nw.get_lat()
+    
+    def get_w(self):
+        return self._nw.get_lng()
+    
+    def get_s(self):
+        return self._se.get_lat()
+    
+    def get_e(self):
+        return self._se.get_lng()
+
     def isvalid(self):
         if nw.isvalid:
             if se.isvalid:
@@ -54,6 +99,31 @@ class BoundingBox(object):
     
     def __str__(self):
         return str(self.__dict__)
+
+    def __eq__(self, other):
+        if not isinstance(other, BoundingBox):
+            return NotImplemented
+        if self.nw != other.nw:
+            return NotImplemented
+        if self.se != other.se:
+            return NotImplemented
+        return True
+
+    def __ne__(self, other):
+        result = self.__eq__(other)
+        if result is NotImplemented:
+            return result
+        return not result
+
+    def __hash__(self):
+        return hash('%s,%s %s,%s' % (self.get_w(), self.get_n(), self.get_e(), self.get_s()))
+
+    def __cmp__(self, other):
+        if self.__eq__(other):
+            return 0
+        if self.nw.__gt__(other.nw):
+            return 1
+        return -1
 
     @classmethod
     def intersect_all(cls, bb_list):
