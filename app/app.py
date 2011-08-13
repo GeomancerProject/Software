@@ -77,46 +77,69 @@ class ApiHandler(BaseHandler):
 
     def get(self):
         keywords = []
-        name = self.request.get('feature', None)
+        place = self.request.get('place', None)
         category = self.request.get('type', None)
         source = self.request.get('source', None)
         limit = self.request.get_range('limit', min_value=1, max_value=100, default=10)
         offset = self.request.get_range('offset', min_value=0, default=0)
         
-        if name:
-            name = name.replace(',', '')
-            logging.info('name=%s' % name)
-            feature = Feature.get_by_name(name)
-            if feature:
-                self.response.headers["Content-Type"] = "application/json"
-                self.response.out.write(feature.j)
-                return
-            else:
-                keywords = self.tokenize(name.replace(',', ' ').split(), set())
-                logging.info('keywords=%s' % str(keywords))
-        
-        features = FeatureIndex.search(
-            limit, offset, keywords=keywords, category=category, source=source)
-
-        bounding_boxes = []
-        results = []
-        for f in features:
-            data = simplejson.loads(f.j)
-            results.append(data)
-            bounding_boxes.append(BoundingBox.create(
-                    data['minx'], data['maxy'], data['maxx'], data['miny']))
-            
-        if not BoundingBox.intersect_all(bounding_boxes):
+        if place:
+            # Search Feature on id where id is each name in palce (names comma separated)
+            features = Feature.search(place)
+            logging.info('FEATURES=%s' % [f.key for f in features])
+            n = len(features)
             results = []
+            if n == 1: # Exact match on one Feature
+                results.append(simplejson.loads(features[0].j))
+            elif n > 1: # Exact match on multiple Features
+                bboxes = []
+                for feature in features:
+                    data = simplejson.loads(feature.j)
+                    bboxes.append(
+                        BoundingBox.create(
+                            data['minx'], 
+                            data['maxy'], 
+                            data['maxx'], 
+                            data['miny']))                    
+                if BoundingBox.intersect_all(bboxes): # Return all features with intersection=True
+                    results = dict(
+                        features=[simplejson.loads(feature.j) for feature in features],
+                        intersection=True)
+                else: # Return all features with intersection=False
+                    results = dict(
+                        features=[simplejson.loads(feature.j) for feature in features],
+                        intersection=False)
+            if len(results) > 0: # If exact results return them
+                self.response.headers["Content-Type"] = "application/json"
+                self.response.out.write(simplejson.dumps(results))
+                return
         
-        if len(keywords) > 0:
-            result = dict(results=results, exact_match=False)
-        else:
-            result = results
-
-        self.response.headers["Content-Type"] = "application/json"
-        self.response.out.write(simplejson.dumps(result))
-            
+        # Search FeatureIndex on keywords derived from each place name
+        if place:
+            results = set()
+            search_results = FeatureIndex.search_place_keywords(place)
+            if len(search_results) == 1: # Keyword FeatureIndex hit on single name
+                name, features = search_results.popitem()
+                results = [simplejson.loads(feature.j) for feature in features]                
+                self.response.headers["Content-Type"] = "application/json"
+                self.response.out.write(simplejson.dumps(results))
+                return
+            # Perform cross-product intersection tests and return all matching pairs
+            for name,features in search_results.iteritems():
+                for feature in features:                    
+                    for other_name, other_features in search_results.iteritems():
+                        if name == other_name:
+                            continue                        
+                        data = simplejson.loads(feature.j)
+                        fbbox = BoundingBox.create(data['minx'], data['maxy'], data['maxx'], data['miny'])
+                        for other_feature in other_features:
+                            data = simplejson.loads(other_feature.j)
+                            obbox = BoundingBox.create(data['minx'], data['maxy'], data['maxx'], data['miny'])                           
+                            logging.info('feature=%s, other_feature=%s, fbbox=%s, obbox=%s' % (feature, other_feature, fbbox, obbox))
+                            if BoundingBox.intersect_all([fbbox, obbox]):
+                                results.update([feature, other_feature])
+            self.response.headers["Content-Type"] = "application/json"
+            self.response.out.write(simplejson.dumps(list(results)))
 
 application = webapp.WSGIApplication(
     [('/gaz/api', ApiHandler),], debug=True)
