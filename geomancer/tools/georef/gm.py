@@ -94,17 +94,13 @@ class PredictionApi(object):
 
     @classmethod
     def predict(cls, query):
-        argv = ['./gm.py', cls.OBJECT_NAME_ARG]  
-        print argv
-        # Let the gflags module process the command-line arguments
+        argv = ['./gm.py', cls.OBJECT_NAME_ARG]  # holy hack batman
+
         try:
             argv = cls.FLAGS(argv)
         except gflags.FlagsError, e:
             print '%s\\nUsage: %s ARGS\\n%s' % (e, argv[0], cls.FLAGS)
             sys.exit(1)
-
-        # Set the logging according to the command-line flag
-        #logging.getLogger().setLevel(getattr(logging, cls.FLAGS.logging_level))
 
         storage = Storage('prediction.dat')
         credentials = storage.get()
@@ -123,35 +119,18 @@ class PredictionApi(object):
             train = service.training()
             body = {'id' : cls.FLAGS.object_name}
             start = train.insert(body=body).execute()
-
-            #print 'Started training'
-            #pprint.pprint(start)
-
             import time
-            # Wait for the training to complete
             while True:
                 try:
-                    # We check the training job is completed. If it is not it will return an error code.
                     status = train.get(data=cls.FLAGS.object_name).execute()
-                    # Job has completed.
-                    #pprint.pprint(status)
                     break
                 except apiclient.errors.HttpError as error:
-                    # Training job not yet completed.
-                    print 'Waiting for training to complete.'
                     time.sleep(10)
-
-            #print 'Training is complete'
 
             # Now make a prediction using that training
             body = {'input': {'csvInstance': [query]}}
             prediction = train.predict(body=body, data=cls.FLAGS.object_name).execute()
-            #print 'The prediction is:'
-            #pprint.pprint(prediction)
-            
-            #pprint.pprint(prediction)
             json_content = prediction
-
             scores = []
             # classification task
             if json_content.has_key('outputLabel'):
@@ -161,8 +140,6 @@ class PredictionApi(object):
             # regression task
             else:
                 predict = json_content['outputValue']
-
-            print('predict=%s, scores=%s' % (predict, scores))
             return [predict, scores]
 
 
@@ -181,9 +158,6 @@ class PredictionApi(object):
                     score = value
             scores[label] = score
         return scores
-
-
-
 
 class Locality(object):
     """Class representing a sub-locality."""
@@ -231,5 +205,5 @@ if __name__ == '__main__':
     sql = 'insert into geocodes values (?, ?)'
     cursor = conn.cursor()
     cursor.execute(sql, (address, simplejson.dumps(response)))
-    conn.commit()
-    
+    conn.commit() 
+   
