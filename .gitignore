@@ -39,4 +39,5 @@ bulkloader-progress*
 context.txt
 csvsplit.py
 clean_files.sh
-
+prediction.dat
+prediction-creds.txt

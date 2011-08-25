@@ -104,7 +104,7 @@ class PredictionApi(object):
             sys.exit(1)
 
         # Set the logging according to the command-line flag
-        logging.getLogger().setLevel(getattr(logging, cls.FLAGS.logging_level))
+        #logging.getLogger().setLevel(getattr(logging, cls.FLAGS.logging_level))
 
         storage = Storage('prediction.dat')
         credentials = storage.get()
@@ -124,8 +124,8 @@ class PredictionApi(object):
             body = {'id' : cls.FLAGS.object_name}
             start = train.insert(body=body).execute()
 
-            print 'Started training'
-            pprint.pprint(start)
+            #print 'Started training'
+            #pprint.pprint(start)
 
             import time
             # Wait for the training to complete
@@ -134,96 +134,44 @@ class PredictionApi(object):
                     # We check the training job is completed. If it is not it will return an error code.
                     status = train.get(data=cls.FLAGS.object_name).execute()
                     # Job has completed.
-                    pprint.pprint(status)
+                    #pprint.pprint(status)
                     break
                 except apiclient.errors.HttpError as error:
                     # Training job not yet completed.
                     print 'Waiting for training to complete.'
                     time.sleep(10)
 
-            print 'Training is complete'
+            #print 'Training is complete'
 
             # Now make a prediction using that training
             body = {'input': {'csvInstance': [query]}}
             prediction = train.predict(body=body, data=cls.FLAGS.object_name).execute()
-            print 'The prediction is:'
-            pprint.pprint(prediction)
+            #print 'The prediction is:'
+            #pprint.pprint(prediction)
+            
+            #pprint.pprint(prediction)
+            json_content = prediction
+
+            scores = []
+            # classification task
+            if json_content.has_key('outputLabel'):
+                predict = json_content['outputLabel']
+                jsonscores = json_content['outputMulti']
+                scores = cls.ExtractDictScores(jsonscores)
+            # regression task
+            else:
+                predict = json_content['outputValue']
+
+            print('predict=%s, scores=%s' % (predict, scores))
+            return [predict, scores]
 
 
         except AccessTokenRefreshError:
             print ("The credentials have been revoked or expired, please re-run"
                    "the application to re-authorize")
 
-            
-class GooglePredictionApi(object):
-
-    AUTH = None
-    MODEL = 'biogeomancer/locs.csv'
-    CREDS = 'prediction-creds.txt'
-
     @classmethod
-    def predict(cls, query):
-        if not cls.AUTH:
-            u,p = open(cls.CREDS, 'r').read().split(':')
-            cls.AUTH = cls.GetAuthentication(u.strip(), p.strip())
-        results = cls.Predict(query)
-
-    @staticmethod
-    def GetAuthentication(email, password):
-        """Retrieves a Google authentication token.
-        """
-        url = 'https://www.google.com/accounts/ClientLogin'
-        post_data = urllib.urlencode([
-                ('Email', email),
-                ('Passwd', password),
-                ('accountType', 'HOSTED_OR_GOOGLE'),
-                ('source', 'companyName-applicationName-versionID'),
-                ('service', 'xapi'),
-                ])
-        result = urllib.urlopen(url=url, data=post_data)
-        content = result.read()
-        logging.info('CONTENT=%s' % content)
-        content = '&'.join(content.split())
-        query = cgi.parse_qs(content)
-        auth = query['Auth'][0]
-        logging.info('Auth: ' + auth)
-        return auth
-
-    @classmethod
-    def Predict(cls, query, auth=None, model=None):
-        if auth is None:
-            auth = cls.AUTH
-        if model is None:
-            model = cls.MODEL
-
-        url = ('https://www.googleapis.com/prediction/v1.3/training/'
-               '%s/predict' % urllib.quote(model, ''))
-        headers = {
-            'Content-Type': 'application/json',
-            'Authorization': 'GoogleLogin auth=%s' % auth,
-            }
-        post_data = GooglePredictionApi.GetPostData(query)
-        logging.info('Post Data: '+ str(post_data))
-        result = urllib2.urlopen(urllib2.Request(url=url, data=post_data, headers=headers))
-        content = result.read()
-        logging.info('Content: ' + content)
-        json_content = simplejson.loads(content)['data']
-
-        scores = []
-        print simplejson.loads(content)
-        # classification task
-        if 'outputLabel' in json_content:
-            prediction = json_content['outputLabel']
-            jsonscores = json_content['outputMulti']
-            scores = GooglePredictionApi.ExtractDictScores(jsonscores)
-        # regression task
-        else:
-            prediction = json_content['outputValue']
-
-        return [prediction, scores]
-
-    @staticmethod
-    def ExtractDictScores(jsonscores):
+    def ExtractDictScores(cls, jsonscores):
         scores = {}
         for pair in jsonscores:
             for key, value in pair.iteritems():
@@ -234,17 +182,8 @@ class GooglePredictionApi(object):
             scores[label] = score
         return scores
 
-    @staticmethod
-    def GetPostData(query):
-        data_input = {}
-        data_input['mixture'] = [query]
 
-        post_data = simplejson.dumps({
-                'data': {
-                    'input': data_input
-                    }
-                })
-        return post_data
+
 
 class Locality(object):
     """Class representing a sub-locality."""
