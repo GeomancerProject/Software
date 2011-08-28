@@ -27,7 +27,7 @@ import sqlite3
 import sys
 import urllib
 import urllib2
-
+import yaml
 import apiclient.errors
 import gflags
 import httplib2
@@ -63,18 +63,6 @@ def _getoptions():
                       help='URL endpoint to /remote_api to bulkload to.')                          
     return parser.parse_args()[0]
 
-def _setupdb():
-    conn = sqlite3.connect('gm.sqlite.db', check_same_thread=False)
-    c = conn.cursor()
-    c.execute('create table if not exists geocodes' +
-              '(address text, ' +
-              'response text)')
-
-    c.execute('create table if not exists loctypes' +
-              '(loc text, ' +
-              'type text)')
-    c.close()
-    return conn
 
 class PredictionApi(object):
 
@@ -145,9 +133,10 @@ PREDICT_GEOMANCER_MISS = 'predict_geomancer_miss'
 PREDICT_GOOGLE_HIT = 'predict_google_hit'
 PREDICT_GOOGLE_MISS = 'predict_google_miss'
 
-
-
 class Cache(object):
+
+    """Local cache based on SQLite for locality types and geocodes."""
+
     def __init__(self, filename=None):
         if not filename:
             filename = 'gm.cache.sqlite3.db'
@@ -162,33 +151,41 @@ class Cache(object):
         c.close()
 
     def get_loctype(self, loc):
+        """Gets a locality type for a locality."""
         sql = 'select type from loctypes where loc = ?'
-        return self.conn.cursor().execute(sql, (loc,)).fetchone()
+        result = self.conn.cursor().execute(sql, (loc.lower(),)).fetchone()
+        if result:
+            result = result[0]
+        return result        
 
     def put_loctype(self, loc, loctype):
+        """Puts a locality type for a locality."""
         sql = 'insert into loctypes (loc, type) values (?, ?)'
-        cursor = self.conn.cursor().execute(sql, (loc, loctype))
+        cursor = self.conn.cursor().execute(sql, (loc.lower(), loctype))
         self.conn.commit()
         
 class Geomancer(object):
+
+    """Class for georeferencing addresses."""
     
     def __init__(self, cache, predictor):
         self.cache = cache
         self.predictor = predictor
 
     def predict(self, localities):
+        """Predicts locality type for each locality in a list."""
         for loc in localities:
             state = PREDICT_START
             while True:
 
                 # Prediction success
                 if state == PREDICT_DONE:
-                    logging.info('state=%s, locality=%s' % (state, loc))
+                    logging.info('locality=%s, type=%s' % (loc.name, loc.type))
                     break
 
                 # Prediction failure
                 elif state == PREDICT_FAIL:
-                    logging.info('state=%s, locality=%s' % (state, loc))
+                    logging.info('locality=%s' % (state, loc))
                     return state
 
                 elif state == PREDICT_START:
@@ -233,8 +230,9 @@ class Geomancer(object):
         return PREDICT_DONE
 
     def georeferece(self, location):
+        """Georeferences a location."""
         localities = Locality.create_muti(location)
-        logging.info('Georeferencing %s - %s' % (location, localities))
+        logging.info('Georeferencing %s - %s' % (location, [x.name for x in localities]))
         state = START
         while True:
             if state == START:
@@ -262,7 +260,7 @@ class Locality(object):
     @classmethod
     def create_muti(cls, location):
         """Return list of Locality objects by splitting location on ',' and ';'."""
-        return [Locality(name) for name in set(reduce(            
+        return [Locality(name.strip()) for name in set(reduce(            
                     lambda x,y: x+y, 
                     [x.split(';') for x in location.split(',')]))]
 
@@ -278,26 +276,24 @@ class Locality(object):
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
     options = _getoptions()
-    cache = gm.Cache('gmtest.cache.sqlite3.db')
+    cache = Cache()
     config = yaml.load(open('gm.yaml', 'r'))        
-    api = gm.PredictionApi(config, cache)
-    address = options.address
-    logging.info(api.get_type(address))
-
-    # conn = _setupdb()
+    predictor = PredictionApi(config, cache)
+    geomancer = Geomancer(cache, predictor)
+    results = geomancer.georeferece(options.address)
+    logging.info(results)
     
+    # Prototyping geocode stuff:
+
     # sql = 'select address,response from geocodes where address = ?'
     # c = conn.cursor()
     # cache = {}
-    # address = options.address
-    
+    # address = options.address    
     # for row in c.execute(sql, (address,)):
-    #     cache[row[0]] = row[1]
-    
+    #     cache[row[0]] = row[
     # if cache.has_key(address):
     #     logging.info('CACHE HIT: address=%s' % address)
     #     sys.exit(1)
-    
     # logging.info('CACHE MISS: address=%s' % address)
     # params = urllib.urlencode(dict(address=address, sensor='true'))
     # url = 'http://maps.googleapis.com/maps/api/geocode/json?%s' % params
