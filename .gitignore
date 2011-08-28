@@ -41,3 +41,4 @@ csvsplit.py
 clean_files.sh
 prediction.dat
 prediction-creds.txt
+gm.yaml

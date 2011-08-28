@@ -16,6 +16,9 @@
 
 __author__ = "Aaron Steele"
 
+import setup_env
+setup_env.fix_sys_path()
+
 import cgi
 import logging
 from optparse import OptionParser
@@ -66,89 +69,53 @@ def _setupdb():
     c.execute('create table if not exists geocodes' +
               '(address text, ' +
               'response text)')
+
+    c.execute('create table if not exists loctypes' +
+              '(loc text, ' +
+              'type text)')
     c.close()
     return conn
 
-
 class PredictionApi(object):
-    FLAGS = gflags.FLAGS
 
-    FLOW = OAuth2WebServerFlow(
-        client_id='1077648189165-7filsif33gnm6i92opietsrihppauune.apps.googleusercontent.com',
-        client_secret='p6u7L1V-aEw2e12CWy-k77eZ',
-        scope='https://www.googleapis.com/auth/prediction',
-        user_agent='prediction-cmdline-sample/1.0')
-    
-    gflags.DEFINE_enum('logging_level', 'ERROR',
-        ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
-        'Set the level of logging detail.')
+    def __init__(self, config, cache):
+        self.config = config
+        self.cache = cache
+        self._set_flow()
 
-    gflags.DEFINE_string(
-        'object_name',
-        None,
-        'Full Google Storage path of csv data (ex bucket/object)')
-
-    gflags.MarkFlagAsRequired('object_name')
-    
-    OBJECT_NAME_ARG = '--object_name=biogeomancer/locs.csv'
-
-    @classmethod
-    def predict(cls, query):
-        argv = ['./gm.py', cls.OBJECT_NAME_ARG]  # holy hack batman
-
-        try:
-            argv = cls.FLAGS(argv)
-        except gflags.FlagsError, e:
-            print '%s\\nUsage: %s ARGS\\n%s' % (e, argv[0], cls.FLAGS)
-            sys.exit(1)
-
+    def get_type(self, query):
         storage = Storage('prediction.dat')
         credentials = storage.get()
         if credentials is None or credentials.invalid:
-            credntials = run(cls.FLOW, storage)
-
-        # Create an httplib2.Http object to handle our HTTP requests and authorize it
-        # with our good Credentials.
+            self._set_flow()
+            credntials = run(self.FLOW, storage)
         http = httplib2.Http()
         http = credentials.authorize(http)
-
         service = build("prediction", "v1.3", http=http)
-
         try:
-            # Start training on a data set
             train = service.training()
-            body = {'id' : cls.FLAGS.object_name}
-            start = train.insert(body=body).execute()
-            import time
-            while True:
-                try:
-                    status = train.get(data=cls.FLAGS.object_name).execute()
-                    break
-                except apiclient.errors.HttpError as error:
-                    time.sleep(10)
-
-            # Now make a prediction using that training
             body = {'input': {'csvInstance': [query]}}
-            prediction = train.predict(body=body, data=cls.FLAGS.object_name).execute()
+            prediction = train.predict(body=body, data=self.config['model']).execute()
             json_content = prediction
             scores = []
-            # classification task
             if json_content.has_key('outputLabel'):
                 predict = json_content['outputLabel']
-                jsonscores = json_content['outputMulti']
-                scores = cls.ExtractDictScores(jsonscores)
-            # regression task
+                scores = self._format_results(json_content['outputMulti'])
             else:
                 predict = json_content['outputValue']
             return [predict, scores]
-
-
         except AccessTokenRefreshError:
             print ("The credentials have been revoked or expired, please re-run"
                    "the application to re-authorize")
 
-    @classmethod
-    def ExtractDictScores(cls, jsonscores):
+    def _set_flow(self):
+        self.FLOW = OAuth2WebServerFlow(
+            client_id=self.config['client_id'],
+            client_secret=self.config['client_secret'],
+            scope='https://www.googleapis.com/auth/prediction',
+            user_agent='geomancer/1.0')
+
+    def _format_results(self, jsonscores):
         scores = {}
         for pair in jsonscores:
             for key, value in pair.iteritems():
@@ -159,18 +126,148 @@ class PredictionApi(object):
             scores[label] = score
         return scores
 
+
+START = 'start'
+PARSE = 'parse'
+GEOCODE = 'geocode'
+CALCULATE = 'calculate'
+DONE = 'done'
+FAIL = 'fail'
+
+PREDICT_START = 'predict_start'
+PREDICT_DONE = 'predict_done'
+PREDICT_FAIL = 'predict_fail'
+
+PREDICT_SQLITE_HIT = 'predict_sqlite_hit'
+PREDICT_SQLITE_MISS = 'predict_sqlite_miss'
+PREDICT_GEOMANCER_HIT = 'predict_geomancer_hit'
+PREDICT_GEOMANCER_MISS = 'predict_geomancer_miss'
+PREDICT_GOOGLE_HIT = 'predict_google_hit'
+PREDICT_GOOGLE_MISS = 'predict_google_miss'
+
+
+
+class Cache(object):
+    def __init__(self, filename=None):
+        if not filename:
+            filename = 'gm.cache.sqlite3.db'
+        self.conn = sqlite3.connect(filename, check_same_thread=False)
+        c = self.conn.cursor()
+        c.execute('create table if not exists geocodes' +
+                  '(address text, ' +
+                  'response text)')    
+        c.execute('create table if not exists loctypes' +
+                  '(loc text, ' +
+                  'type text)')
+        c.close()
+
+    def get_loctype(self, loc):
+        sql = 'select type from loctypes where loc = ?'
+        return self.conn.cursor().execute(sql, (loc,)).fetchone()
+
+    def put_loctype(self, loc, loctype):
+        sql = 'insert into loctypes (loc, type) values (?, ?)'
+        cursor = self.conn.cursor().execute(sql, (loc, loctype))
+        self.conn.commit()
+        
+class Geomancer(object):
+    
+    def __init__(self, cache, predictor):
+        self.cache = cache
+        self.predictor = predictor
+
+    def predict(self, localities):
+        for loc in localities:
+            state = PREDICT_START
+            while True:
+
+                # Prediction success
+                if state == PREDICT_DONE:
+                    logging.info('state=%s, locality=%s' % (state, loc))
+                    break
+
+                # Prediction failure
+                elif state == PREDICT_FAIL:
+                    logging.info('state=%s, locality=%s' % (state, loc))
+                    return state
+
+                elif state == PREDICT_START:
+                    # Check SQLite
+                    loc.type = self.cache.get_loctype(loc.name)
+                    if loc.type:
+                        # SQLite hit
+                        state = PREDICT_SQLITE_HIT
+                        logging.info(state)
+                    else:
+                        # SQLite miss
+                        state = PREDICT_SQLITE_MISS
+                        logging.info(state)
+                
+                elif state == PREDICT_SQLITE_HIT:
+                    state = PREDICT_DONE
+                    logging.info(state)
+
+                elif state == PREDICT_SQLITE_MISS:
+                    # TODO:Check Geomancer
+                    state = PREDICT_GEOMANCER_MISS
+                    logging.info(state)
+                    
+                elif state == PREDICT_GEOMANCER_MISS:
+                    loc.type = self.predictor.get_type(loc.name)[0]
+                    if loc.type:
+                        # Google hit
+                        state = PREDICT_GOOGLE_HIT
+                    else:
+                        state = PREDICT_GOOGLE_MISS
+                    logging.info(state)
+                
+                elif state == PREDICT_GOOGLE_HIT:
+                    # Update SQLite and Geomancer
+                    self.cache.put_loctype(loc.name, loc.type)
+                    state = PREDICT_DONE
+                    logging.info(state)
+                    
+                elif state == PREDICT_GOOGLE_MISS:
+                    state = PREDICT_FAIL
+
+        return PREDICT_DONE
+
+    def georeferece(self, location):
+        localities = Locality.create_muti(location)
+        logging.info('Georeferencing %s - %s' % (location, localities))
+        state = START
+        while True:
+            if state == START:
+                state = self.predict(localities)
+                logging.info(state)
+            
+            elif state == FAIL:
+                logging.error('FAIL')
+                return []
+
+            elif state == PREDICT_DONE:
+                # state = PARSE
+                return localities
+                
+            elif state == PREDICT_FAIL:
+                state = FAIL
+
+            elif state == PARSE:
+                logging.info('PARSE')
+                return localities
+    
 class Locality(object):
     """Class representing a sub-locality."""
     
     @classmethod
     def create_muti(cls, location):
         """Return list of Locality objects by splitting location on ',' and ';'."""
-        return [Locality(loc) for loc in set(reduce(            
+        return [Locality(name) for name in set(reduce(            
                     lambda x,y: x+y, 
                     [x.split(';') for x in location.split(',')]))]
 
-    def __init__(self, loc):
-        self.loc = loc
+    def __init__(self, name):
+        self.name = name
         self.type = None
         self.parts = {}
         self.features = set()
@@ -181,29 +278,33 @@ class Locality(object):
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
     options = _getoptions()
-    conn = _setupdb()
-    
-    sql = 'select address,response from geocodes where address = ?'
-    c = conn.cursor()
-    cache = {}
+    cache = gm.Cache('gmtest.cache.sqlite3.db')
+    config = yaml.load(open('gm.yaml', 'r'))        
+    api = gm.PredictionApi(config, cache)
     address = options.address
-    
-    
+    logging.info(api.get_type(address))
 
-    for row in c.execute(sql, (address,)):
-        cache[row[0]] = row[1]
+    # conn = _setupdb()
     
-    if cache.has_key(address):
-        logging.info('CACHE HIT: address=%s' % address)
-        sys.exit(1)
+    # sql = 'select address,response from geocodes where address = ?'
+    # c = conn.cursor()
+    # cache = {}
+    # address = options.address
     
-    logging.info('CACHE MISS: address=%s' % address)
-    params = urllib.urlencode(dict(address=address, sensor='true'))
-    url = 'http://maps.googleapis.com/maps/api/geocode/json?%s' % params
-    response = simplejson.loads(urllib.urlopen(url).read())
-    logging.info('Geocode received from %s' % url)
-    sql = 'insert into geocodes values (?, ?)'
-    cursor = conn.cursor()
-    cursor.execute(sql, (address, simplejson.dumps(response)))
-    conn.commit() 
+    # for row in c.execute(sql, (address,)):
+    #     cache[row[0]] = row[1]
+    
+    # if cache.has_key(address):
+    #     logging.info('CACHE HIT: address=%s' % address)
+    #     sys.exit(1)
+    
+    # logging.info('CACHE MISS: address=%s' % address)
+    # params = urllib.urlencode(dict(address=address, sensor='true'))
+    # url = 'http://maps.googleapis.com/maps/api/geocode/json?%s' % params
+    # response = simplejson.loads(urllib.urlopen(url).read())
+    # logging.info('Geocode received from %s' % url)
+    # sql = 'insert into geocodes values (?, ?)'
+    # cursor = conn.cursor()
+    # cursor.execute(sql, (address, simplejson.dumps(response)))
+    # conn.commit() 
    

@@ -5,9 +5,9 @@ setup_env.fix_sys_path()
 
 import unittest
 import logging
+import yaml
 
 import gm
-#from gm import Locality, PredictionApi
 
 class TestLocality(unittest.TestCase):
     
@@ -22,7 +22,14 @@ class TestLocality(unittest.TestCase):
 
 class TestPredictionApi(unittest.TestCase):
     def test_predict(self):
-        logging.info(gm.PredictionApi.predict('5 miles west of berkeley'))
+        logging.basicConfig(level=logging.DEBUG)
+        cache = gm.Cache('gmtest.cache.sqlite3.db')
+        config = yaml.load(open('gm.yaml', 'r'))        
+        predictor = gm.PredictionApi(config, cache)
+        geomancer = gm.Geomancer(cache, predictor)
+        geomancer.georeferece('5 miles west of berkeley, califorina, usa')
+        
+        #logging.info(api.get_type('5 miles west of berkeley'))
     
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
