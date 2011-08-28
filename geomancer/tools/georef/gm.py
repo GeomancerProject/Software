@@ -51,7 +51,7 @@ def _getoptions():
                       type='string', 
                       dest='config_file',
                       metavar='FILE', 
-                      help='Bulkload YAML config file.')    
+                      help='YAML config file.')    
     parser.add_option('--filename', 
                       type='string', 
                       dest='filename',
@@ -277,7 +277,7 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
     options = _getoptions()
     cache = Cache()
-    config = yaml.load(open('gm.yaml', 'r'))        
+    config = yaml.load(open(options.config_file, 'r'))        
     predictor = PredictionApi(config, cache)
     geomancer = Geomancer(cache, predictor)
     results = geomancer.georeferece(options.address)
