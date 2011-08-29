@@ -10,5 +10,5 @@ post_data="{\"id\":\"$ID\"}"
 # Train the model.
 java -cp ./oacurl-1.2.0.jar com.google.oacurl.Fetch -X POST \
 -t JSON \
-"https://www.googleapis.com/prediction/v1.2/training?key=$KEY" <<< $post_data
+"https://www.googleapis.com/prediction/v1.3/training?key=$KEY" <<< $post_data
 echo

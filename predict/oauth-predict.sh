@@ -11,5 +11,5 @@ data="{\"input\" : { \"csvInstance\" : [ $INPUT ]}}"
 
 java -cp ./oacurl-1.2.0.jar com.google.oacurl.Fetch -X POST \
 -t JSON \
-"https://www.googleapis.com/prediction/v1.2/training/$MODEL/predict?key=$KEY" <<< $data
+"https://www.googleapis.com/prediction/v1.3/training/$MODEL/predict?key=$KEY" <<< $data
 echo

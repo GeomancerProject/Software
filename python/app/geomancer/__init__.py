@@ -34,12 +34,46 @@ should be set to 7 to preserve reversible transformations between coordinate sys
 down to a resolution of roughly 1 m."""
 DEGREE_DIGITS = 7
 
-FORMAT = """.%sf"""
+def has_num(token):
+    i=0
+    for c in token:
+        if c.isdigit():
+            return i
+    return None
+
+def is_mixed(token):
+    if has_num(token) is not None and not token.isnumber():
+        return True
+    return False
+
+def is_fraction(token):
+    frac = token.split('/')
+    if len(frac)==2 and isdigit(frac[0]) and isdigit(frac[1]) and float(frac[1])!=0:
+        return truncate(float(frac[0]/frac[1]),4)
+    return 0
+
+def is_number(s):
+    try:
+        float(s)
+        return True
+    except ValueError:
+        return False    
 
 def truncate(x, digits):
-    """Returns x including precision to the right of the decimal equal to digits."""
-    format_x = FORMAT % digits
-    return format(x,format_x)
+    """Returns a string representation of x including a number of places to the right of 
+    the decimal equal to digits.
+    
+    Arguments:
+        x - the input float
+        digits - the number of places of precision to the right of the decimal
+    """
+    if x==0:
+        return '0'
+    if digits==0:
+        return str(int(round(x)))
+    FORMAT = """.%sf"""
+    format_x = FORMAT % str(int(digits))
+    return format(x, format_x).rstrip('0').rstrip('.')
 
 def sqr(x):
     """Returns the square of x."""

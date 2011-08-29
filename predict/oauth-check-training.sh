@@ -10,5 +10,5 @@ MODEL=`echo $DATA | perl -pe 's:/:%2F:g'`
 
 # Check training status.
 java -cp ./oacurl-1.2.0.jar com.google.oacurl.Fetch -X GET \
-  "https://www.googleapis.com/prediction/v1.2/training/$MODEL?key=$KEY"
+  "https://www.googleapis.com/prediction/v1.3/training/$MODEL?key=$KEY"
 echo
