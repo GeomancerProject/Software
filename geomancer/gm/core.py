@@ -39,6 +39,7 @@ def has_num(token):
     for c in token:
         if c.isdigit():
             return i
+        i+=1
     return None
 
 def is_mixed(token):
