@@ -76,7 +76,7 @@ class GetLoctype(webapp.RequestHandler):
             return
         loc = Locality.get_loctype(locname)
         if not loc:
-            logging.error('Locality for locname=%s not found' % locname)
+            logging.info('Locality for locname=%s not found' % locname)
             return
         self.response.headers["Content-Type"] = "application/json"
         self.response.out.write(loc.json)
