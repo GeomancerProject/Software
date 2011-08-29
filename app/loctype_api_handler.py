@@ -72,12 +72,10 @@ class GetLoctype(webapp.RequestHandler):
         # TODO: required login?
         locname = self.request.get('locname', None)
         if not locname:
-            self.error(404)
             logging.error('No locname parameter')
             return
         loc = Locality.get_loctype(locname)
         if not loc:
-            self.error(404)
             logging.error('Locality for locname=%s not found' % locname)
             return
         self.response.headers["Content-Type"] = "application/json"
@@ -91,8 +89,8 @@ class PutLoctype(webapp.RequestHandler):
         loctype = self.request.get('loctype', None)
         json = self.request.get('json', None)
         if not locname or not loctype or not json:
-            self.error(400)
             logging.error('Missing required fields')
+            return
         Locality.put_loctype(locname, loctype, json)
             
 application = webapp.WSGIApplication(
