@@ -17,7 +17,7 @@ handlers:
   script: app.py
 
 - url: /cache/.*
-  script: loctype_api_handler.py
+  script: remote_cache_handler.py
 
 # GitHub service hooks
 - url: /service-hooks/post-receive

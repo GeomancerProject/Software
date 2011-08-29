@@ -383,7 +383,7 @@ class Locality(object):
         return str(self.__dict__)
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.INFO)
     options = _getoptions()
     cache = Cache('localhost:8080', 'user@example.com', 'secret')
     config = yaml.load(open(options.config_file, 'r'))        
