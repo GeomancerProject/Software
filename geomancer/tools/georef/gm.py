@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 # Copyright 2011 The Regents of the University of California 
-# All Rights Reserved 
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,6 +18,7 @@ __author__ = "Aaron Steele (eightysteele@gmail.com)"
 __copyright__ = "Copyright 2011 The Regents of the University of California"
 __contributors__ = ["John Wieczorek (gtuco.btuco@gmail.com)"]
 
+# Just for testing
 import setup_env
 setup_env.fix_sys_path()
 
@@ -135,23 +135,26 @@ class LocalCache(object):
         c.execute('create table if not exists loctypes' +
                   '(locname text, ' +
                   'loctype text, ' +
-                  'predictions text)') # predictions is a JSON string
+                  'scores text)') # scores is a JSON string
         c.close()
 
     def get_loctype(self, locname):
-        """Gets a locality type for a locality."""
-        sql = 'select loctype, predictions from loctypes where locname = ?'
+        """Returns a dictionary with keys loctype, locname, and scores."""
+        sql = 'select loctype, scores from loctypes where locname = ?'
         result = self.conn.cursor().execute(sql, (locname.lower(),)).fetchone()
         if result:
-            loctype, predictions = result
-            result = (loctype, simplejson.loads(predictions))
-            return result            
+            return dict(
+                locname=locname, 
+                loctype=result[0], 
+                scores=simplejson.loads(result[1]))
 
-    def put_loctype(self, locname, loctype, predictions):
+    def put_loctype(self, hit):
         """Puts a locality type for a locality."""
-        sql = 'insert into loctypes (locname, loctype, predictions) values (?, ?, ?)'
-        cursor = self.conn.cursor()
-        cursor.execute(sql, (locname.lower(), loctype, predictions))
+        sql = 'insert into loctypes (locname, loctype, scores) values (?, ?, ?)'
+        values = (hit['locname'].lower(), 
+                  hit['loctype'], 
+                  simplejson.dumps(hit['scores']))
+        self.conn.cursor().execute(sql, values)
         self.conn.commit()
 
 class RemoteCache(object):
@@ -180,12 +183,15 @@ class RemoteCache(object):
 
     class PutLoctype(AppEngine.RPC):
 
-        def __init__(self, locname, loctype, predictions):
+        def __init__(self, hit):
+            locname = hit['locname']
+            loctype = hit['loctype']
+            scores = hit['scores']
             json = simplejson.dumps(
                 dict( 
                     locname=locname,
                     loctype=loctype,
-                    scores=predictions))
+                    scores=scores))
             self._payload = urllib.urlencode(
                 dict(
                     locname=locname,
@@ -211,11 +217,14 @@ class RemoteCache(object):
         self.server = AppEngine(host, email, passwd)  
 
     def get_loctype(self, locname):
-        return self.server.send(RemoteCache.GetLoctype(locname))
+        content = self.server.send(RemoteCache.GetLoctype(locname))
+        hit = None
+        if content:
+            hit = simplejson.loads(content)
+        return hit
 
-    def put_loctype(self, locname, loctype, predictions):
-        self.server.send(RemoteCache.PutLoctype(locname, loctype, predictions))
-        
+    def put_loctype(self, hit):
+        self.server.send(RemoteCache.PutLoctype(hit))
 
 class Cache(object):
     
@@ -227,26 +236,25 @@ class Cache(object):
     
     def get_loctype(self, locname):
         # Check local cache
-        result = self.local.get_loctype(locname)
-        if not result:
+        hit = self.local.get_loctype(locname)
+        if not hit:
             logging.info('Local cache MISS - %s' % locname)
             # Check remote cache
-            result = self.remote.get_loctype(locname)
-            if result:
+            hit = self.remote.get_loctype(locname)
+            if hit:
                 logging.info('Remote cache HIT - %s' % locname)
-                loctype, predictions = result
                 # Update local cache
-                self.local.put_loctype(locname, loctype, simplejson.dumps(predictions))
+                self.local.put_loctype(hit)
             else:
                 logging.info('Remote cache MISS - %s' % locname)
         else:
             logging.info('Local cache HIT - %s' % locname)
-        return result
+        return hit
 
-    def put_loctype(self, locname, loctype, predictions):  
-        logging.info('Cache update - locname=%s loctype=%s' % (locname, loctype))
-        self.local.put_loctype(locname, loctype, simplejson.dumps(predictions))
-        self.remote.put_loctype(locname, loctype, predictions)
+    def put_loctype(self, hit):  
+        logging.info('Cache update - %s=%s' % (hit['locname'], hit['loctype']))
+        self.local.put_loctype(hit)
+        self.remote.put_loctype(hit)
 
 class PredictionApi(object):
 
@@ -275,6 +283,7 @@ class PredictionApi(object):
                 scores = self._format_results(json_content['outputMulti'])
             else:
                 predict = json_content['outputValue']
+            logging.info('Predicted %s for %s' % (predict, query))
             return [predict, scores]
         except AccessTokenRefreshError:
             print ("The credentials have been revoked or expired, please re-run"
@@ -330,23 +339,15 @@ class Geomancer(object):
         """Predicts locality type for each locality in a list."""
         for loc in localities:
             # Check cache for loctype
-            result = self.cache.get_loctype(loc.name)
-            if not result:
-                # Get predicted loctype
-                result = self.predictor.get_type(loc.name)
-            if result:
-                loctype, predictions = result
-                # Set loctype
-                loc.type = loctype
-                # Update cache
-                json = simplejson.dumps(dict(
-                        locname=loc.name, 
-                        loctype=loctype,
-                        predictions=predictions))
-                self.cache.put_loctype(loc.name, loctype, predictions)
-            else:
-                # Prediction fail
-                return []
+            hit = self.cache.get_loctype(loc.name)
+            if not hit:
+                # Get predicted loctype and update chace
+                loctype, scores = self.predictor.get_type(loc.name)
+                hit = dict(locname=loc.name, loctype=loctype, scores=scores)
+                self.cache.put_loctype(hit)
+            # Set loctype
+            loc.type = hit['loctype']
+
         return localities
 
     def georeferece(self, location):
