@@ -19,11 +19,21 @@ __copyright__ = "Copyright 2011 The Regents of the University of California"
 __contributors__ = ["John Wieczorek (gtuco.btuco@gmail.com)"]
 
 # Just for testing
-import setup_env
-setup_env.fix_sys_path()
+# import setup_env
+# setup_env.fix_sys_path()
 
+global verbosity
+verbosity = 1
+
+# Geomancer modules
+from cache import Cache
+from localities import Locality, PredictionApi
+from utils import UnicodeDictReader, UnicodeDictWriter, CredentialsPrompt
+
+# Standard Python modules
 import cgi
 import logging
+import optparse
 from optparse import OptionParser
 import simplejson
 import sqlite3
@@ -43,270 +53,6 @@ from oauth2client.file import Storage
 from oauth2client.client import AccessTokenRefreshError
 from oauth2client.client import OAuth2WebServerFlow
 from oauth2client.tools import run
-
-def _getoptions():
-    ''' Parses command line options and returns them.'''
-    parser = OptionParser()
-    parser.add_option('-a', '--address', 
-                      type='string', 
-                      dest='address',
-                      metavar='STRING', 
-                      help='Address to geocode.')    
-    parser.add_option('--config_file', 
-                      type='string', 
-                      dest='config_file',
-                      metavar='FILE', 
-                      help='YAML config file.')    
-    parser.add_option('--filename', 
-                      type='string', 
-                      dest='filename',
-                      metavar='FILE', 
-                      help='CSV file with data to bulkload.')                          
-    parser.add_option('--url', 
-                      type='string', 
-                      dest='url',
-                      help='URL endpoint to /remote_api to bulkload to.')                          
-    return parser.parse_args()[0]
-
-class AppEngine(object):
-
-    class RPC(object):
-        """Abstract class for remote procedure calls."""
-
-        __metaclass__ = ABCMeta
-
-        @abstractmethod
-        def request_path(self):
-            """The path to send the request to, eg /api/appversion/create."""
-            pass
-
-        @abstractmethod
-        def payload(self):
-            """The body of the request, or None to send an empty request"""
-            pass
-
-        @abstractmethod
-        def content_type(self):
-            """The Content-Type header to use."""
-            pass
-
-        @abstractmethod
-        def timeout(self):
-            """Timeout in seconds; default None i.e. no timeout. Note: for large
-            requests on OS X, the timeout doesn't work right."""
-            pass
-
-        @abstractmethod
-        def kwargs(self):
-            """Any keyword arguments."""
-            pass
-
-    def send(self, rpc):
-        return self.server.Send(
-            rpc.request_path(),
-            rpc.payload(),
-            rpc.content_type(),
-            rpc.timeout(),
-            **rpc.kwargs())
-
-    def __init__(self, host, email, passwd):
-        """Initializes the server with user credentials and app details."""
-        logging.info('Host %s' % host)
-        self.server = HttpRpcServer(
-            host,
-            lambda:(email, passwd),
-            None,
-            'geo-mancer',
-            debug_data=True,
-            secure=False)
-
-class LocalCache(object):
-
-    """Local cache based on SQLite for locality types and geocodes."""
-
-    def __init__(self, filename=None):
-        if not filename:
-            filename = 'gm.cache.sqlite3.db'
-        self.conn = sqlite3.connect(filename, check_same_thread=False)
-        c = self.conn.cursor()
-        c.execute('create table if not exists geocodes' +
-                  '(address text, ' +
-                  'response text)')    
-        c.execute('create table if not exists loctypes' +
-                  '(locname text, ' +
-                  'loctype text, ' +
-                  'scores text)') # scores is a JSON string
-        c.close()
-
-    def get_loctype(self, locname):
-        """Returns a dictionary with keys loctype, locname, and scores."""
-        sql = 'select loctype, scores from loctypes where locname = ?'
-        result = self.conn.cursor().execute(sql, (locname.lower(),)).fetchone()
-        if result:
-            return dict(
-                locname=locname, 
-                loctype=result[0], 
-                scores=simplejson.loads(result[1]))
-
-    def put_loctype(self, hit):
-        """Puts a locality type for a locality."""
-        sql = 'insert into loctypes (locname, loctype, scores) values (?, ?, ?)'
-        values = (hit['locname'].lower(), 
-                  hit['loctype'], 
-                  simplejson.dumps(hit['scores']))
-        self.conn.cursor().execute(sql, values)
-        self.conn.commit()
-
-class RemoteCache(object):
-    
-    """Remote cache based on App Engine for locality types and geocodes."""
-
-    class GetLoctype(AppEngine.RPC):
-
-        def __init__(self, locname):
-            self._kwargs = dict(locname=locname)
-
-        def request_path(self):
-            return '/cache/get_loctype'
-
-        def payload(self):
-            return None
-        
-        def content_type(self):
-            return ''
-    
-        def timeout(self):
-            return None
-  
-        def kwargs(self):  
-            return self._kwargs
-
-    class PutLoctype(AppEngine.RPC):
-
-        def __init__(self, hit):
-            locname = hit['locname']
-            loctype = hit['loctype']
-            scores = hit['scores']
-            json = simplejson.dumps(
-                dict( 
-                    locname=locname,
-                    loctype=loctype,
-                    scores=scores))
-            self._payload = urllib.urlencode(
-                dict(
-                    locname=locname,
-                    loctype=loctype,
-                    json=json))
-
-        def request_path(self):
-            return '/cache/put_loctype'
-
-        def payload(self):
-            return self._payload
-        
-        def content_type(self):
-            return 'application/x-www-form-urlencoded'
-    
-        def timeout(self):
-            return None
-  
-        def kwargs(self):  
-            return {}
-
-    def __init__(self, host, email, passwd):
-        self.server = AppEngine(host, email, passwd)  
-
-    def get_loctype(self, locname):
-        content = self.server.send(RemoteCache.GetLoctype(locname))
-        hit = None
-        if content:
-            hit = simplejson.loads(content)
-        return hit
-
-    def put_loctype(self, hit):
-        self.server.send(RemoteCache.PutLoctype(hit))
-
-class Cache(object):
-    
-    """Cache for locality types and geocodes from local and remote storage."""
-
-    def __init__(self, host, email, passwd, filename=None):
-        self.local = LocalCache(filename=filename)
-        self.remote = RemoteCache(host, email, passwd)
-    
-    def get_loctype(self, locname):
-        # Check local cache
-        hit = self.local.get_loctype(locname)
-        if not hit:
-            logging.info('Local cache MISS - %s' % locname)
-            # Check remote cache
-            hit = self.remote.get_loctype(locname)
-            if hit:
-                logging.info('Remote cache HIT - %s' % locname)
-                # Update local cache
-                self.local.put_loctype(hit)
-            else:
-                logging.info('Remote cache MISS - %s' % locname)
-        else:
-            logging.info('Local cache HIT - %s' % locname)
-        return hit
-
-    def put_loctype(self, hit):  
-        logging.info('Cache update - %s=%s' % (hit['locname'], hit['loctype']))
-        self.local.put_loctype(hit)
-        self.remote.put_loctype(hit)
-
-class PredictionApi(object):
-
-    def __init__(self, config, cache):
-        self.config = config
-        self.cache = cache
-        self._set_flow()
-
-    def get_type(self, query):
-        storage = Storage('prediction.dat')
-        credentials = storage.get()
-        if credentials is None or credentials.invalid:
-            self._set_flow()
-            credntials = run(self.FLOW, storage)
-        http = httplib2.Http()
-        http = credentials.authorize(http)
-        service = build("prediction", "v1.3", http=http)
-        try:
-            train = service.training()
-            body = {'input': {'csvInstance': [query]}}
-            prediction = train.predict(body=body, data=self.config['model']).execute()
-            json_content = prediction
-            scores = []
-            if json_content.has_key('outputLabel'):
-                predict = json_content['outputLabel']
-                scores = self._format_results(json_content['outputMulti'])
-            else:
-                predict = json_content['outputValue']
-            logging.info('Predicted %s for %s' % (predict, query))
-            return [predict, scores]
-        except AccessTokenRefreshError:
-            print ("The credentials have been revoked or expired, please re-run"
-                   "the application to re-authorize")
-
-    def _set_flow(self):
-        self.FLOW = OAuth2WebServerFlow(
-            client_id=self.config['client_id'],
-            client_secret=self.config['client_secret'],
-            scope='https://www.googleapis.com/auth/prediction',
-            user_agent='geomancer/1.0')
-
-    def _format_results(self, jsonscores):
-        scores = {}
-        for pair in jsonscores:
-            for key, value in pair.iteritems():
-                if key == 'label':
-                    label = value
-                elif key == 'score':
-                    score = value
-            scores[label] = score
-        return scores
-
 
 START = 'start'
 PARSE = 'parse'
@@ -363,53 +109,209 @@ class Geomancer(object):
             logging.info('"%s" -> %s' % (loc.name, loc.type))
         #localities_parsed = self.parse(localities_with_type)
 
-class Locality(object):
-    """Class representing a sub-locality."""
-    
-    @classmethod
-    def create_muti(cls, location):
-        """Return list of Locality objects by splitting location on ',' and ';'."""
-        return [Locality(name.strip()) for name in set(reduce(            
-                    lambda x,y: x+y, 
-                    [x.split(';') for x in location.split(',')]))]
+def PrintUpdate(msg):
+    if verbosity > 0:
+        print >>sys.stderr, msg
 
-    def __init__(self, name):
-        self.name = name
-        self.type = None
-        self.parts = {}
-        self.features = set()
+def StatusUpdate(msg):
+    PrintUpdate(msg)
+
+def ErrorUpdate(msg):
+    PrintUpdate('ERROR: %s' % msg)
+
+def _GeoreferenceOptions(self, parser):
+    parser.add_option('-a', '--address', type='string', dest='address',
+                      help='Address to geocode.')    
+    parser.add_option('--config_file', type='string', dest='config_file',
+                      metavar='FILE', help='YAML config file.')
+    parser.add_option('--filename', type='string', dest='filename',
+                      metavar='FILE', help='CSV file with data to bulkload.')                      
+    parser.add_option('--url', type='string', dest='url',
+                      help='URL endpoint to /remote_api to bulkload to.')                          
+    parser.add_option('--host', type='string', dest='host',
+                      help='App Engine host name for cache and bulkloading.')                          
+    parser.add_option('--num_threads', type='int', dest='num_threads', default=5,
+                      help='Number of threads to transfer records with.')                          
+    parser.add_option('--batch_size', type='int', dest='batch_size', default=1,
+                      help='Number of records to pst in each request.')                          
+    parser.add_option('-l', '--localhost', dest='localhost', action='store_true', 
+                      help='Shortcut for bulkloading to http://localhost:8080/_ah/remote_api')                          
+
+class Action(object):
+    """Contains information about a command line action."""
+
+    def __init__(self, function, usage, short_desc, long_desc='',
+                 error_desc=None, options=lambda obj, parser: None,
+                 uses_basepath=True):
+        """Initializer for the class attributes."""
+        self.function = function
+        self.usage = usage
+        self.short_desc = short_desc
+        self.long_desc = long_desc
+        self.error_desc = error_desc
+        self.options = options
+        self.uses_basepath = uses_basepath
+
+    def __call__(self, appcfg):
+        """Invoke this Action on the specified Vn."""
+        method = getattr(appcfg, self.function)
+        return method()
+
+class Gm(object):
     
-    def __repr__(self):
-        return str(self.__dict__)
+    """Class for executing command line actions."""
+
+    # Actions
+    actions = dict(
+        help=Action(
+            function='Help',
+            usage='%prog help <action>',
+            short_desc='Print help for a specific action.',
+            uses_basepath=False),
+        georef=Action( 
+            function='Georeference',
+            usage='%prog [options] georef <file>',
+            options=_GeoreferenceOptions,
+            short_desc='Georeference.',
+            long_desc="""TODO"""))
+
+    def __init__(self, argv, parser_class=optparse.OptionParser):
+        self.parser_class = parser_class
+        self.argv = argv
+        self.parser = self._GetOptionParser()
+        for action in self.actions.itervalues():
+            action.options(self, self.parser)
+        self.options, self.args = self.parser.parse_args(argv[1:])
+        if len(self.args) < 1:
+            self._PrintHelpAndExit()
+        action = self.args.pop(0)
+        if action not in self.actions:
+            self.parser.error("Unknown action: '%s'\n%s" %
+                              (action, self.parser.get_description()))
+        self.action = self.actions[action]
+        self.parser, self.options = self._MakeSpecificParser(self.action)
+        if self.options.help:
+            self._PrintHelpAndExit()
+        if self.options.verbose == 2:
+            logging.getLogger().setLevel(logging.INFO)
+        elif self.options.verbose == 3:
+            logging.getLogger().setLevel(logging.DEBUG)
+        verbosity = self.options.verbose
+
+    def Run(self):
+        try:
+            self.action(self)
+        except Exception as e:
+            raise e
+        return 0
+
+    def Help(self, action=None):
+        """Prints help for a specific action."""
+        if not action:
+            if len(self.args) > 1:
+                self.args = [' '.join(self.args)]
+
+        if len(self.args) != 1 or self.args[0] not in self.actions:
+            self.parser.error('Expected a single action argument. '
+                              ' Must be one of:\n' +
+                              self._GetActionDescriptions())
+        action = self.args[0]
+        action = self.actions[action]
+        self.parser, unused_options = self._MakeSpecificParser(action)
+        self._PrintHelpAndExit(exit_code=0)
+
+    def Georeference(self):
+        if self.options.localhost:
+            host = 'localhost:8080'
+        else:
+            host = self.options.host
+        cache = Cache(host)
+        config = yaml.load(open(self.options.config_file, 'r'))        
+        predictor = PredictionApi(config, cache)
+        geomancer = Geomancer(cache, predictor)
+        results = geomancer.georeferece(self.options.address)  
+        return results
+
+    def _PrintHelpAndExit(self, exit_code=2):
+        """Prints the parser's help message and exits the program."""
+        self.parser.print_help()
+        sys.exit(exit_code)
+
+    def _GetActionDescriptions(self):
+        """Returns a formatted string containing the short_descs for all actions."""
+        action_names = self.actions.keys()
+        action_names.sort()
+        desc = ''
+        for action_name in action_names:
+            desc += '  %s: %s\n' % (action_name, self.actions[action_name].short_desc)
+        return desc
+
+    def _MakeSpecificParser(self, action):
+        """Creates a new parser with documentation specific to 'action'."""
+        parser = self._GetOptionParser()
+        parser.set_usage(action.usage)
+        parser.set_description('%s\n%s' % (action.short_desc, action.long_desc))
+        action.options(self, parser)
+        options, unused_args = parser.parse_args(self.argv[1:])
+        return parser, options
+
+    def _GetOptionParser(self):
+        """Creates an OptionParser with generic usage and description strings."""
+
+        class Formatter(optparse.IndentedHelpFormatter):
+            """Custom help formatter that does not reformat the description."""
+            def format_description(self, description):
+                """Very simple formatter."""
+                return description + '\n'
+        desc = self._GetActionDescriptions()
+        desc = ('Action must be one of:\n%s'
+                'Use \'help <action>\' for a detailed description.') % desc
+        parser = self.parser_class(usage='%prog [options] <action>',
+                                   description=desc,
+                                   formatter=Formatter(),
+                                   conflict_handler='resolve')
+        parser.add_option('-h', '--help', action='store_true',
+                          dest='help', help='Show the help message and exit.')
+        parser.add_option('-v', '--verbose', action='store_const', const=2,
+                          dest='verbose', default=1,
+                          help='Print info level logs.')
+        return parser
+
+
+def main(argv):
+    logging.basicConfig(format=('%(asctime)s %(levelname)s %(filename)s:'
+                                '%(lineno)s %(message)s '))
+    try:
+        result = Gm(argv).Run()
+        if result:
+            sys.exit(result)
+    except KeyboardInterrupt:
+        StatusUpdate('Interrupted.')
+        sys.exit(1)
+    except Exception as e:
+        logging.info(e)
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.INFO)
-    options = _getoptions()
-    cache = Cache('localhost:8080', 'user@example.com', 'secret')
-    config = yaml.load(open(options.config_file, 'r'))        
-    predictor = PredictionApi(config, cache)
-    geomancer = Geomancer(cache, predictor)
-    results = geomancer.georeferece(options.address)
-    logging.info(results)
+    main(sys.argv)
     
-    # Prototyping geocode stuff:
-
-    # sql = 'select address,response from geocodes where address = ?'
-    # c = conn.cursor()
-    # cache = {}
-    # address = options.address    
-    # for row in c.execute(sql, (address,)):
-    #     cache[row[0]] = row[
-    # if cache.has_key(address):
-    #     logging.info('CACHE HIT: address=%s' % address)
-    #     sys.exit(1)
-    # logging.info('CACHE MISS: address=%s' % address)
-    # params = urllib.urlencode(dict(address=address, sensor='true'))
-    # url = 'http://maps.googleapis.com/maps/api/geocode/json?%s' % params
-    # response = simplejson.loads(urllib.urlopen(url).read())
-    # logging.info('Geocode received from %s' % url)
-    # sql = 'insert into geocodes values (?, ?)'
-    # cursor = conn.cursor()
-    # cursor.execute(sql, (address, simplejson.dumps(response)))
-    # conn.commit() 
+# Prototyping geocode stuff:
+    
+# sql = 'select address,response from geocodes where address = ?'
+# c = conn.cursor()
+# cache = {}
+# address = options.address    
+# for row in c.execute(sql, (address,)):
+#     cache[row[0]] = row[
+# if cache.has_key(address):
+#     logging.info('CACHE HIT: address=%s' % address)
+#     sys.exit(1)
+# logging.info('CACHE MISS: address=%s' % address)
+# params = urllib.urlencode(dict(address=address, sensor='true'))
+# url = 'http://maps.googleapis.com/maps/api/geocode/json?%s' % params
+# response = simplejson.loads(urllib.urlopen(url).read())
+# logging.info('Geocode received from %s' % url)
+# sql = 'insert into geocodes values (?, ?)'
+# cursor = conn.cursor()
+# cursor.execute(sql, (address, simplejson.dumps(response)))
+# conn.commit() 
    

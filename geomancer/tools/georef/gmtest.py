@@ -7,6 +7,7 @@ import unittest
 import logging
 import simplejson
 import yaml
+import utils
 
 import gm
 
@@ -27,11 +28,14 @@ class TestGeomancer(unittest.TestCase):
     #     results = geomancer.georeferece('5 miles west of berkeley, califorina, usa')
     #     logging.info(results)
 
-    def test_remote_cache(self):
-        remote = gm.RemoteCache('localhost:8080', 'foo', 'bar')
-        remote.put_loctype('berkeley', 'f', simplejson.dumps(dict(loctype='f', locname='berkley')))
-        loctype = remote.get_loctype('berkeley')
-        logging.info(loctype)
+#    def test_remote_cache(self):
+#        remote = gm.RemoteCache('localhost:8080', 'foo', 'bar')
+#        remote.put_loctype('berkeley', 'f', simplejson.dumps(dict(loctype='f', locname='berkley')))
+#        loctype = remote.get_loctype('berkeley')
+#        logging.info(loctype)
+
+    def test_auth(self):
+        logging.info(utils.AuthFunction('localhost:8080', None, None, False))
     
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
