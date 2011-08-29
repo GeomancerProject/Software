@@ -3,8 +3,12 @@
 import setup_env
 setup_env.fix_sys_path()
 
+import cache
+from cache import Cache
+
 import unittest
 import logging
+import os
 import simplejson
 import yaml
 import utils
@@ -34,8 +38,18 @@ class TestGeomancer(unittest.TestCase):
 #        loctype = remote.get_loctype('berkeley')
 #        logging.info(loctype)
 
-    def test_auth(self):
-        logging.info(utils.AuthFunction('localhost:8080', None, None, False))
+    #def test_auth(self):
+        #logging.info(utils.CredentialsPrompt('localhost:8080'))
+    pass
+    
+class TestCache(unittest.TestCase):
+    def test_cache(self):
+        Cache.config(local_filename='gmtest.db')
+        key = u'aaron'
+        value = dict(value='amazing')        
+        Cache.put(key, value)
+        self.assertEqual(value, Cache.get(key))
+        self.assertEqual(None, Cache.get('foo'))
     
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)

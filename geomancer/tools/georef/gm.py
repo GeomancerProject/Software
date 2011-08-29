@@ -53,30 +53,9 @@ from oauth2client.file import Storage
 from oauth2client.client import AccessTokenRefreshError
 from oauth2client.client import OAuth2WebServerFlow
 from oauth2client.tools import run
-
-START = 'start'
-PARSE = 'parse'
-GEOCODE = 'geocode'
-CALCULATE = 'calculate'
-DONE = 'done'
-FAIL = 'fail'
-
-PREDICT_START = 'predict_start'
-PREDICT_DONE = 'predict_done'
-PREDICT_FAIL = 'predict_fail'
-
-PREDICT_SQLITE_HIT = 'predict_sqlite_hit'
-PREDICT_SQLITE_MISS = 'predict_sqlite_miss'
-PREDICT_GEOMANCER_HIT = 'predict_geomancer_hit'
-PREDICT_GEOMANCER_MISS = 'predict_geomancer_miss'
-PREDICT_GOOGLE_HIT = 'predict_google_hit'
-PREDICT_GOOGLE_MISS = 'predict_google_miss'
-
         
 class Geomancer(object):
-
     """Class for georeferencing addresses."""
-    
     def __init__(self, cache, predictor):
         self.cache = cache
         self.predictor = predictor

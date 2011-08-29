@@ -29,149 +29,132 @@ import simplejson
 import sqlite3
 import sys
 import urllib
+    
+# Setup local cache
+CREATE_SQL = 'create table if not exists cache (key text, value text)'
+GET_SQL = 'select value from cache where key = ?'
+PUT_SQL = 'insert into cache (key, value) values (?, ?)'
+CONN = sqlite3.connect('gm.cache.sqlite3.db', check_same_thread=False)
+CONN.cursor().execute(CREATE_SQL)
+
+# Setup remote cache
+SERVER = None
+HOST = 'localhost:8080'
+
+def _setup_local(filename):
+    global CONN
+    CONN = sqlite3.connect(filename, check_same_thread=False)
+    CONN.cursor().execute(CREATE_SQL)
+
+def _setup_remote(host=HOST):
+    global HOST
+    global SERVER
+    HOST = host
+    email, passwd = CredentialsPrompt('the Geomancer remote cache at %s' % HOST)
+    SERVER = AppEngine(HOST, email, passwd)
+
+def _assert_key(key):
+    assert key is not None
+    assert isinstance(key, str) or isinstance(key, unicode)
+
+def _assert_value(value):
+    assert value is not None
 
 class LocalCache(object):
-    """Local cache based on SQLite for locality types and geocodes."""
+    """Local key/value cache where values are stored as JSON."""
 
-    def __init__(self, filename=None):
-        if not filename:
-            filename = 'gm.cache.sqlite3.db'
-        self.conn = sqlite3.connect(filename, check_same_thread=False)
-        c = self.conn.cursor()
-        c.execute('create table if not exists geocodes' +
-                  '(address text, ' +
-                  'response text)')    
-        c.execute('create table if not exists loctypes' +
-                  '(locname text, ' +
-                  'loctype text, ' +
-                  'scores text)') # scores is a JSON string
-        c.close()
-
-    def get_loctype(self, locname):
-        """Returns a dictionary with keys loctype, locname, and scores."""
-        sql = 'select loctype, scores from loctypes where locname = ?'
-        result = self.conn.cursor().execute(sql, (locname.lower(),)).fetchone()
-        if result:
-            return dict(
-                locname=locname, 
-                loctype=result[0], 
-                scores=simplejson.loads(result[1]))
-
-    def put_loctype(self, hit):
-        """Puts a locality type for a locality."""
-        sql = 'insert into loctypes (locname, loctype, scores) values (?, ?, ?)'
-        values = (hit['locname'].lower(), 
-                  hit['loctype'], 
-                  simplejson.dumps(hit['scores']))
-        self.conn.cursor().execute(sql, values)
-        self.conn.commit()
+    @classmethod
+    def get(cls, key):
+        _assert_key(key)
+        hit = CONN.cursor().execute(GET_SQL, (key,)).fetchone()
+        if hit:
+            return simplejson.loads(hit[0])
+                
+    @classmethod
+    def put(cls, key, value):
+        _assert_key(key)
+        _assert_value(value)
+        CONN.cursor().execute(PUT_SQL, (key, simplejson.dumps(value)))
+        CONN.commit()
 
 class RemoteCache(object):
     """Remote cache based on App Engine for locality types and geocodes."""
 
-    class GetLoctype(AppEngine.RPC):
-
-        def __init__(self, locname):
-            self._kwargs = dict(locname=locname)
-
+    class Get(AppEngine.RPC):
+        def __init__(self, key):
+            self._kwargs = dict(key=key)
         def request_path(self):
-            return '/cache/get_loctype'
-
+            return '/cache/get'
         def payload(self):
-            return None
-        
+            return None        
         def content_type(self):
-            return ''
-    
+            return ''    
         def timeout(self):
-            return None
-  
+            return None  
         def kwargs(self):  
-            return self._kwargs
+            return self._kwargs    
 
-    class PutLoctype(AppEngine.RPC):
-
-        def __init__(self, hit):
-            locname = hit['locname']
-            loctype = hit['loctype']
-            scores = hit['scores']
-            json = simplejson.dumps(
-                dict( 
-                    locname=locname,
-                    loctype=loctype,
-                    scores=scores))
+    class Put(AppEngine.RPC):
+        def __init__(self, key, value):
             self._payload = urllib.urlencode(
-                dict(
-                    locname=locname,
-                    loctype=loctype,
-                    json=json))
-
+                dict(key=key, value=simplejson.dumps(value)))
         def request_path(self):
-            return '/cache/put_loctype'
-
+            return '/cache/put'
         def payload(self):
-            return self._payload
-        
+            return self._payload        
         def content_type(self):
-            return 'application/x-www-form-urlencoded'
-    
+            return 'application/x-www-form-urlencoded'    
         def timeout(self):
-            return None
-  
+            return None  
         def kwargs(self):  
             return {}
-
-    def __init__(self, host, email, passwd):
-        self.server = AppEngine(host, email, passwd)  
-
-    def get_loctype(self, locname):
-        content = self.server.send(RemoteCache.GetLoctype(locname))
+        
+    @classmethod
+    def get(cls, key):
+        _assert_key(key)
+        if not SERVER:
+            _setup_remote()
+        content = SERVER.send(RemoteCache.Get(key))
         hit = None
         if content:
             hit = simplejson.loads(content)
         return hit
-
-    def put_loctype(self, hit):
-        self.server.send(RemoteCache.PutLoctype(hit))
+    
+    @classmethod
+    def put(cls, key, value):
+        _assert_key(key)
+        _assert_value(value)
+        if not SERVER:
+            _setup_remote()
+        logging.info('SERVER = %s' % SERVER)
+        SERVER.send(RemoteCache.Put(key, value))
 
 class Cache(object):
     """Cache for locality types and geocodes from local and remote storage."""
 
-    def __init__(self, host, creds=None, filename=None):
-        self.host = host
-        self.local = LocalCache(filename=filename)
-        if creds:
-            self.remote = RemoteCache(host, creds[0], creds[1])
-        else:
-            self.remote = None
+    @classmethod
+    def config(cls, remote_host=None, local_filename=None):
+        if remote_host:
+            _setup_remote(remote_host)
+        if local_filename:
+            _setup_local(local_filename)
+
+    @classmethod
+    def get(cls, key):
+        value = LocalCache.get(key)
+        if value:
+            logging.info('LocalCache HIT: %s=%s' % (key, value))
+            return value
+        logging.info('LocalCache MISS: key=%s' % key)
+        value = RemoteCache.get(key)
+        if value:
+            logging.info('RemoteCache HIT: %s=%s' % (key, value))
+            LocalCache.put(key, value)
+            return value
+        logging.info('RemoteCache MISS: key=%s' % key)
     
-    def get_loctype(self, locname):
-        # Check local cache
-        hit = self.local.get_loctype(locname)
-        if not hit:
-            logging.info('Local cache MISS - %s' % locname)
-            # Check remote cache
-            if not self.remote:
-                self._setup_remote()
-            hit = self.remote.get_loctype(locname)
-            if hit:
-                logging.info('Remote cache HIT - %s' % locname)
-                # Update local cache
-                self.local.put_loctype(hit)
-            else:
-                logging.info('Remote cache MISS - %s' % locname)
-        else:
-            logging.info('Local cache HIT - %s' % locname)
-        return hit
-
-    def put_loctype(self, hit):  
-        logging.info('Cache update - %s=%s' % (hit['locname'], hit['loctype']))
-        self.local.put_loctype(hit)
-        if not self.remote:
-            self._setup_remote()
-        self.remote.put_loctype(hit)
-
-    def _setup_remote(self):
-        email, passwd = CredentialsPrompt('the Geomancer remote cache at %s' % self.host)
-        self.remote = RemoteCache(self.host, email, passwd)
-        
+    @classmethod
+    def put(cls, key, value):
+        logging.info('Cache UPDATE: %s=%s' % (key, value))
+        LocalCache.put(key, value)
+        RemoteCache.put(key, value)

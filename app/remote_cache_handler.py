@@ -38,7 +38,7 @@ from google.appengine.datastore import datastore_rpc
 from google.appengine.datastore import entity_pb
 
 # Datastore Plus imports
-from ndb import query, model
+from ndb import model
 
 try:
     appid = os.environ['APPLICATION_ID']
@@ -46,56 +46,53 @@ try:
 except:
     pass
 
-class Locality(model.Model): # id=locname
-    loctype = model.StringProperty('t')
-    json = model.StringProperty('j', indexed=False)
+class CacheEntry(model.Model): # id=key
+    value = model.StringProperty('v', indexed=False)
     created = model.DateTimeProperty('c', auto_now_add=True)
 
     @classmethod
-    def get_key(cls, locname):
-        return model.Key('Locality', locname)
+    def get_key(cls, keyname):
+        return model.Key('CacheEntry', keyname)
 
     @classmethod
-    def get_loctype(cls, locname):
-        return cls.get_key(locname).get()
+    def getit(cls, keyname):
+        return cls.get_key(keyname).get()
 
     @classmethod
-    def put_loctype(cls, locname, loctype, json):
-        cls(key=cls.get_key(locname), loctype=loctype, json=json).put()
+    def putit(cls, keyname, value):
+        cls(key=cls.get_key(keyname), value=value).put()
 
-class GetLoctype(webapp.RequestHandler):
-
+class GetHandler(webapp.RequestHandler):
     def get(self):
         self.post()
 
     def post(self):
-        # TODO: required login?
-        locname = self.request.get('locname', None)
-        if not locname:
-            logging.error('No locname parameter')
+        # TODO: required login
+        key = self.request.get('key', None)
+        if not key:
+            logging.error('Missing key parameter')
             return
-        loc = Locality.get_loctype(locname)
-        if not loc:
-            logging.info('Locality for locname=%s not found' % locname)
+        entry = CacheEntry.getit(key)        
+        if not entry:
+            logging.info('No CacheEntry found for key=%s' % key)
             return
         self.response.headers["Content-Type"] = "application/json"
-        self.response.out.write(loc.json)
-
-class PutLoctype(webapp.RequestHandler):
-
+        self.response.out.write(entry.value)
+        
+class PutHandler(webapp.RequestHandler):
     def post(self):
-        # TODO: require login?
-        locname = self.request.get('locname', None)
-        loctype = self.request.get('loctype', None)
-        json = self.request.get('json', None)
-        if not locname or not loctype or not json:
-            logging.error('Missing required fields')
+        # TODO: require login
+        key = self.request.get('key', None)
+        value = self.request.get('value', None)
+        if not key and not value:
+            logging.error('The key and value parameters are both required')
             return
-        Locality.put_loctype(locname, loctype, json)
+        logging.info('Putting %s=%s' % (key, value))
+        CacheEntry.putit(key, value)
             
 application = webapp.WSGIApplication(
-    [('/cache/get_loctype', GetLoctype),
-     ('/cache/put_loctype', PutLoctype),], debug=True)
+    [('/cache/get', GetHandler),
+     ('/cache/put', PutHandler),], debug=True)
          
 def main():
     run_wsgi_app(application)
