@@ -14,12 +14,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-__author__ = "Aaron Steele and John Wieczorek"
+__author__ = "John Wieczorek (gtuco.btuco@gmail.com)"
+__copyright__ = "Copyright 2011 The Regents of the University of California"
+__contributors__ = ["Aaron Steele (eightysteele@gmail.com)"]
 
-import sys
-sys.path.insert(0, '../')
+from core import *
 
-from geomancer import *
 import logging
 
 def parse(loc, loctype):
