@@ -24,7 +24,8 @@ import unittest
 
 sys.path.insert(0, '../')
 
-from util.bb import *
+from gm.bb import BoundingBox
+from gm.bb import Point
 
 class BBTest(unittest.TestCase):
     def test_intersection(self):
