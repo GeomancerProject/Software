@@ -111,11 +111,11 @@ class TestGeomancer(unittest.TestCase):
        ],
        "status" : "OK"
     }""")
-        logging.info(georef_feature(geocode))
+#        logging.info(georef_feature(geocode))
 
     def test_point2wgs84(self):
         agd66point = Point(144.966666667, -37.8)
-        wgs84point = point2wgs84(agd66point, Datums.AGD84)
+        wgs84point = agd66point.point2wgs84(Datums.AGD84)
         logging.info(wgs84point)
         logging.info(Datums.AGD84)
     #    144.96797984155188, -37.798491994062296
@@ -263,24 +263,24 @@ class TestGeomancer(unittest.TestCase):
         p = getDistancePrecision(d)
         logging.info(d+" "+str(p))
         
-    def test_georeference_feature(self):
-        geocode = get_example_geocode()
-        georef = georef_feature(geocode)
-        logging.info('Georeference: %s'%(georef))
+#    def test_georeference_feature(self):
+#        geocode = get_example_geocode()
+#        georef = georef_feature(geocode)
+#        logging.info('Georeference: %s'%(georef))
     
     def test_point_from_dist_at_bearing(self):
         point = Point(0,0)
         distance = 1000000
         bearing = 45 
-        endpoint = get_point_from_distance_at_bearing(point, distance, bearing)
+        endpoint = point.get_point_from_distance_at_bearing(distance, bearing)
         logging.info("%s meters at bearing %s from %s, %s: %s"%(distance, bearing, point.lng, point.lat, endpoint) )
         
     def test_haversine_distance(self):
         point = Point(0,0)
         distance = 1000000
         bearing = 45 
-        endpoint = get_point_from_distance_at_bearing(point, distance, bearing)
-        hdist = haversine_distance(point, endpoint)
+        endpoint = point.get_point_from_distance_at_bearing(distance, bearing)
+        hdist = point.haversine_distance(endpoint)
         logging.info("%s meters"%(hdist) )
         diff = math.fabs(distance - hdist) 
         if diff >= 0.5:
@@ -302,8 +302,8 @@ class TestGeomancer(unittest.TestCase):
         self.assertEqual(has_num('km6'), 2)
         self.assertEqual(has_num('1/2'), 0)
 
-    def test_parse(self):
-        p=parse('5 mi N Ft. Bragg', 'foh')
+    def test_parse_loc(self):
+        p=parse_loc('5 mi N Ft. Bragg', 'foh')
         self.assertEqual(p['verbatim_loc'],'5 mi N Ft. Bragg')
         self.assertEqual(p['locality_type'],'foh')
         self.assertEqual(p['offset_value'],'5')
@@ -315,7 +315,7 @@ class TestGeomancer(unittest.TestCase):
         p['features'].remove('Ft. Bragg')
         self.assertEqual(len(p['features']),0)
         
-        p=parse('99 Palms 500 ft. N', 'foh')
+        p=parse_loc('99 Palms 500 ft. N', 'foh')
         self.assertEqual(p['verbatim_loc'],'99 Palms 500 ft. N')
         self.assertEqual(p['locality_type'],'foh')
         self.assertEqual(p['offset_value'],'500')
@@ -325,7 +325,7 @@ class TestGeomancer(unittest.TestCase):
         self.assertEqual(p['status'],'complete')
         self.assertEqual(p['features'][0],'99 Palms')
 
-        p=parse('500 ft. N 99 Palms', 'foh')
+        p=parse_loc('500 ft. N 99 Palms', 'foh')
         self.assertEqual(p['verbatim_loc'],'500 ft. N 99 Palms')
         self.assertEqual(p['locality_type'],'foh')
         self.assertEqual(p['offset_value'],'500')
@@ -335,7 +335,7 @@ class TestGeomancer(unittest.TestCase):
         self.assertEqual(p['status'],'complete')
         self.assertEqual(p['features'][0],'99 Palms')
 
-        p=parse('South Haven 6 km west', 'foh')
+        p=parse_loc('South Haven 6 km west', 'foh')
         self.assertEqual(p['verbatim_loc'],'South Haven 6 km west')
         self.assertEqual(p['locality_type'],'foh')
         self.assertEqual(p['offset_value'],'6')
@@ -345,7 +345,7 @@ class TestGeomancer(unittest.TestCase):
         self.assertEqual(p['status'],'complete')
         self.assertEqual(p['features'][0],'South Haven')
 
-        p=parse('6km west Berkeley', 'foh')
+        p=parse_loc('6km west Berkeley', 'foh')
         self.assertEqual(p['verbatim_loc'],'6km west Berkeley')
         self.assertEqual(p['locality_type'],'foh')
         self.assertEqual(p['offset_value'],'6')
@@ -355,7 +355,7 @@ class TestGeomancer(unittest.TestCase):
         self.assertEqual(p['status'],'complete')
         self.assertEqual(p['features'][0],'Berkeley')
 
-        p=parse('5 1/2 miles NE of Berkeley', 'foh')
+        p=parse_loc('5 1/2 miles NE of Berkeley', 'foh')
         self.assertEqual(p['verbatim_loc'],'5 1/2 miles NE of Berkeley')
         self.assertEqual(p['locality_type'],'foh')
         self.assertEqual(p['offset_value'],'5.5')
@@ -365,7 +365,7 @@ class TestGeomancer(unittest.TestCase):
         self.assertEqual(p['status'],'complete')
         self.assertEqual(p['features'][0],'Berkeley')
 
-        p=parse('7 mi W up 6-mile creek', 'foh')
+        p=parse_loc('7 mi W up 6-mile creek', 'foh')
         self.assertEqual(p['verbatim_loc'],'7 mi W up 6-mile creek')
         self.assertEqual(p['locality_type'],'foh')
         self.assertEqual(p['offset_value'],'7')
@@ -375,7 +375,7 @@ class TestGeomancer(unittest.TestCase):
         self.assertEqual(p['status'],'complete')
         self.assertEqual(p['features'][0],'6-mile creek')
 
-        p=parse('7 mi W 10 Mile','foh')
+        p=parse_loc('7 mi W 10 Mile','foh')
         self.assertEqual(p['verbatim_loc'],'7 mi W 10 Mile')
         self.assertEqual(p['locality_type'],'foh')
         self.assertEqual(p['offset_value'],'7')
@@ -385,7 +385,7 @@ class TestGeomancer(unittest.TestCase):
         self.assertEqual(p['status'],'complete')
         self.assertEqual(p['features'][0],'10 mile')
 
-        p=parse('6 Mile Creek 7 mi W','foh')
+        p=parse_loc('6 Mile Creek 7 mi W','foh')
         self.assertEqual(p['verbatim_loc'],'6 Mile Creek 7 mi W')
         self.assertEqual(p['locality_type'],'foh')
         self.assertEqual(p['offset_value'],'7')
@@ -395,7 +395,7 @@ class TestGeomancer(unittest.TestCase):
         self.assertEqual(p['status'],'complete')
         self.assertEqual(p['features'][0],'6 Mile Creek')
 
-        p=parse('7 mi W N fork 6 Mile Creek','foh')
+        p=parse_loc('7 mi W N fork 6 Mile Creek','foh')
         self.assertEqual(p['verbatim_loc'],'7 mi W N fork 6 Mile Creek')
         self.assertEqual(p['locality_type'],'foh')
         self.assertEqual(p['offset_value'],'7')
@@ -405,7 +405,7 @@ class TestGeomancer(unittest.TestCase):
         self.assertEqual(p['status'],'complete')
         self.assertEqual(p['features'][0],'N fork 6 Mile Creek')
 
-        p=parse('10 miles North of Gaastra', 'foh')
+        p=parse_loc('10 miles North of Gaastra', 'foh')
         self.assertEqual(p['verbatim_loc'],'10 miles North of Gaastra')
         self.assertEqual(p['locality_type'],'foh')
         self.assertEqual(p['offset_value'],'10')
@@ -415,7 +415,7 @@ class TestGeomancer(unittest.TestCase):
         self.assertEqual(p['status'],'complete')
         self.assertEqual(p['features'][0],'Gaastra')
 
-        p=parse('10 mi. N from Gaastra', 'foh')
+        p=parse_loc('10 mi. N from Gaastra', 'foh')
         self.assertEqual(p['verbatim_loc'],'10 mi. N from Gaastra')
         self.assertEqual(p['locality_type'],'foh')
         self.assertEqual(p['offset_value'],'10')
@@ -425,7 +425,7 @@ class TestGeomancer(unittest.TestCase):
         self.assertEqual(p['status'],'complete')
         self.assertEqual(p['features'][0],'Gaastra')
 
-        p=parse('10 mi N Gaastra', 'foh')
+        p=parse_loc('10 mi N Gaastra', 'foh')
         self.assertEqual(p['verbatim_loc'],'10 mi N Gaastra')
         self.assertEqual(p['locality_type'],'foh')
         self.assertEqual(p['offset_value'],'10')
@@ -435,7 +435,7 @@ class TestGeomancer(unittest.TestCase):
         self.assertEqual(p['status'],'complete')
         self.assertEqual(p['features'][0],'Gaastra')
 
-        p=parse('10mi north Gaastra', 'foh')
+        p=parse_loc('10mi north Gaastra', 'foh')
         self.assertEqual(p['verbatim_loc'],'10mi north Gaastra')
         self.assertEqual(p['locality_type'],'foh')
         self.assertEqual(p['offset_value'],'10')
@@ -445,7 +445,7 @@ class TestGeomancer(unittest.TestCase):
         self.assertEqual(p['status'],'complete')
         self.assertEqual(p['features'][0],'Gaastra')
 
-        p=parse('10mi. N Gaastra', 'foh')
+        p=parse_loc('10mi. N Gaastra', 'foh')
         self.assertEqual(p['verbatim_loc'],'10mi. N Gaastra')
         self.assertEqual(p['locality_type'],'foh')
         self.assertEqual(p['offset_value'],'10')
@@ -455,7 +455,7 @@ class TestGeomancer(unittest.TestCase):
         self.assertEqual(p['status'],'complete')
         self.assertEqual(p['features'][0],'Gaastra')
 
-        p=parse('Gaastra 10 mi N', 'foh')
+        p=parse_loc('Gaastra 10 mi N', 'foh')
         self.assertEqual(p['verbatim_loc'],'Gaastra 10 mi N')
         self.assertEqual(p['locality_type'],'foh')
         self.assertEqual(p['offset_value'],'10')
@@ -465,7 +465,7 @@ class TestGeomancer(unittest.TestCase):
         self.assertEqual(p['status'],'complete')
         self.assertEqual(p['features'][0],'Gaastra')
 
-        p=parse('Gaastra 10mi. N', 'foh')
+        p=parse_loc('Gaastra 10mi. N', 'foh')
         self.assertEqual(p['verbatim_loc'],'Gaastra 10mi. N')
         self.assertEqual(p['locality_type'],'foh')
         self.assertEqual(p['offset_value'],'10')

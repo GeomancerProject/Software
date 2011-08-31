@@ -25,7 +25,7 @@ import logging
 import simplejson
 
 from constants import DistanceUnits
-from constants import Datums
+#from constants import Datums
 from constants import Headings
 from bb import BoundingBox
 from point import *
@@ -118,16 +118,6 @@ class Geomancer(object):
         params = urllib.urlencode(dict(address=address, sensor='true'))
         url = 'http://maps.googleapis.com/maps/api/geocode/json?%s' % params
         return simplejson.loads(urllib.urlopen(url).read())
-
-
-"""A_WGS84 is the radius of the sphere at the equator for the WGS84 datum."""
-A_WGS84 = 6378137.0
-
-"""DEGREE_DIGITS is the number of significant digits to the right of the decimal
-to use in latitude and longitude equality determination and representation. This 
-should be set to 7 to preserve reversible transformations between coordinate systems 
-down to a resolution of roughly 1 m."""
-DEGREE_DIGITS = 7
 
 def parse_loc(loc, loctype):
    parts={}
@@ -396,24 +386,24 @@ def get_heading(headingstr):
                 return heading
     return None
 
-#def georef_feature(geocode):
-#    """Returns a Georeference from the Geomancer API.
-#        Arguments:
-#            geocode - a Maps API JSON response for a feature
-#    """
-#    if not geocode:
-#        return None
-#    status = geocode.get('status')
-#    if status != 'OK':
-#        # Geocode failed, no results, no georeference possible.
-#        return None
-#    if geocode.get('results')[0].has_key('geometry') == False:
-#        # First result has no geometry, no georeference possible.
-#        return None
-#    g = geocode.get('results')[0].get('geometry')
-#    point = GeocodeResultParser.get_point(g)
-#    error = GeocodeResultParser.calc_radius(g)
-#    return Georeference(point, error)
+def georef_feature(geocode):
+    """Returns a Georeference from the Geomancer API.
+        Arguments:
+            geocode - a Maps API JSON response for a feature
+    """
+    if not geocode:
+        return None
+    status = geocode.get('status')
+    if status != 'OK':
+        # Geocode failed, no results, no georeference possible.
+        return None
+    if geocode.get('results')[0].has_key('geometry') == False:
+        # First result has no geometry, no georeference possible.
+        return None
+    g = geocode.get('results')[0].get('geometry')
+    point = GeocodeResultParser.get_point(g)
+    error = GeocodeResultParser.calc_radius(g)
+    return Georeference(point, error)
 
 #def georeference(locality):
 #    """Returns a Georeference given a Locality.

@@ -16,6 +16,18 @@
 
 __author__ = "Aaron Steele and John Wieczorek"
 
+import math
+from constants import Datums
+
+"""A_WGS84 is the radius of the sphere at the equator for the WGS84 datum."""
+A_WGS84 = 6378137.0
+
+"""DEGREE_DIGITS is the number of significant digits to the right of the decimal
+to use in latitude and longitude equality determination and representation. This 
+should be set to 7 to preserve reversible transformations between coordinate systems 
+down to a resolution of roughly 1 m."""
+DEGREE_DIGITS = 7
+
 class Point(object):
     """A degree-based geographic coordinate independent of a coordinate reference system."""
 
