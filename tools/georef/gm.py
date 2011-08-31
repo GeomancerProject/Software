@@ -156,7 +156,7 @@ class Gm(object):
             host = self.options.host
         config = yaml.load(open(self.options.config_file, 'r'))        
         predictor = GooglePredictionApi(config['model'], config['client_id'], config['client_secret'])
-        geomancer = Geomancer(predictor, GoogleGeocodingApi)
+        geomancer = Geomancer(predictor, GoogleGeocodingApi, cache_remote_host=host)
         results = geomancer.georef(self.options.address)  
         return results
 
