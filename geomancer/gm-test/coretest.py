@@ -23,14 +23,9 @@ import sys
 # Hack to get ../gm on sys.paht
 sys.path.append('../')
 
-<<<<<<< HEAD:geomancer/gm-test/coretest.py
 from gm.core import *
 from gm.parselocality import *
 from gm import constants
-=======
-from geomancer.core import *
-from geomancer import constants
->>>>>>> 951f4a933d994d32694b8a89bf040860a834bbec:test/coretest.py
 
 import math
 import logging
