@@ -126,7 +126,6 @@ class RemoteCache(object):
         _assert_value(value)
         if not SERVER:
             _setup_remote()
-        logging.info('SERVER = %s' % SERVER)
         SERVER.send(RemoteCache.Put(key, value))
 
 class Cache(object):
@@ -143,18 +142,18 @@ class Cache(object):
     def get(cls, key):
         value = LocalCache.get(key)
         if value:
-            logging.info('LocalCache HIT: %s=%s' % (key, value))
+            logging.info('CACHE-LOCAL-HIT: "%s"' % key)
             return value
-        logging.info('LocalCache MISS: key=%s' % key)
+        logging.info('CACHE-LOCAL-MISS: "%s"' % key)
         value = RemoteCache.get(key)
         if value:
-            logging.info('RemoteCache HIT: %s=%s' % (key, value))
+            logging.info('CACHE-REMOTE-HIT: "%s"' % key)
             LocalCache.put(key, value)
             return value
-        logging.info('RemoteCache MISS: key=%s' % key)
+        logging.info('CACHE-REMOTE-MISS: "%s"' % key)
     
     @classmethod
     def put(cls, key, value):
-        logging.info('Cache UPDATE: %s=%s' % (key, value))
+        logging.info('CACHE-UPDATE: %s' % key)
         LocalCache.put(key, value)
         RemoteCache.put(key, value)

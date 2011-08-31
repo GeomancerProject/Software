@@ -26,7 +26,7 @@ global verbosity
 verbosity = 1
 
 # Geomancer modules
-from geomancer.parselocality import parse
+from geomancer.parselocality import parse as parseloc
 from cache import Cache
 from localities import Locality, PredictionApi
 from utils import UnicodeDictReader, UnicodeDictWriter, CredentialsPrompt
@@ -55,6 +55,7 @@ from oauth2client.client import AccessTokenRefreshError
 from oauth2client.client import OAuth2WebServerFlow
 from oauth2client.tools import run
         
+
 class Geomancer(object):
     """Class for georeferencing addresses."""
     def __init__(self, predictor):
@@ -63,30 +64,48 @@ class Geomancer(object):
     def predict(self, localities):
         """Predicts locality type for each locality in a list."""
         for loc in localities:
-            # Check cache for loctype
-            hit = Cache.get(loc.name)
-            if not hit:
-                # Get predicted loctype and update chace
+            key = 'loctype-%s' % loc.name
+            prediction = Cache.get(key)
+            if not prediction:
                 loctype, scores = self.predictor.get_type(loc.name)
-                hit = dict(locname=loc.name, loctype=loctype, scores=scores)
-                Cache.put(loc.name, hit)
-            # Set loctype
-            loc.type = hit['loctype']
+                prediction = dict(locname=loc.name, loctype=loctype, scores=scores)
+                Cache.put(key, prediction)
+            loc.type = prediction['loctype']
+            loc.type_scores = prediction['scores']
+            logging.info('PREDICTED %s for "%s"' % (loc.type, loc.name))
+        return localities
 
+    def parse(self, localities):
+        for loc in localities:
+            loc.parts = parseloc(loc.name, loc.type)
+            logging.info('PARSED features %s from "%s"' % (list(loc.parts['features']), loc.name))
+        return localities
+
+    def geocode(self, localities):        
+        for loc in localities:
+            loc.feature_geocodes = {}
+            for feature in loc.parts['features']:                
+                key = 'geocode-%s' % feature
+                geocode = Cache.get(key)
+                if not geocode:
+                    geocode = self._google_geocode(feature)
+                    Cache.put(key, geocode)
+                loc.feature_geocodes[feature] = geocode 
+                logging.info('GEOCODED feature "%s"' % feature)
         return localities
 
     def georeferece(self, location):
         """Georeferences a location."""
         localities = Locality.create_muti(location)
         logging.info('Georeferencing %s - %s' % (location, [x.name for x in localities]))
-        localities_with_type = self.predict(localities)
-        if len(localities_with_type) == 0:
-            # Prediction fail
-            logging.info('Unable to georeference %s (locality types unknown)' % location)
-            return None
-        for loc in localities_with_type:
-            logging.info('"%s" -> %s' % (loc.name, loc.type))
-        #localities_parsed = self.parse(localities_with_type)
+        localities_predicted = self.predict(localities)
+        localities_parsed = self.parse(localities_predicted)
+        localities_geocoded = self.geocode(localities_parsed)
+
+    def _google_geocode(self, address):
+        params = urllib.urlencode(dict(address=address, sensor='true'))
+        url = 'http://maps.googleapis.com/maps/api/geocode/json?%s' % params
+        return simplejson.loads(urllib.urlopen(url).read())
 
 def PrintUpdate(msg):
     if verbosity > 0:

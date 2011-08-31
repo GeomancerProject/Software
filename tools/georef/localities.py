@@ -52,6 +52,7 @@ class Locality(object):
     def __init__(self, name):
         self.name = name
         self.type = None
+        self.type_scores = None
         self.parts = {}
         self.features = set()
     
