@@ -141,7 +141,7 @@ class AppEngine(object):
             None,
             'geo-mancer',
             debug_data=True,
-            secure=False)
+            secure=True)
 
 def CredentialsPrompt(host, email=None, passin=False, 
                       raw_input_fn=raw_input, 

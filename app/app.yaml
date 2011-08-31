@@ -18,6 +18,8 @@ handlers:
 
 - url: /cache/.*
   script: remote_cache_handler.py
+  login: required    
+  secure: always
 
 # GitHub service hooks
 - url: /service-hooks/post-receive
