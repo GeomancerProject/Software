@@ -365,25 +365,3 @@ def main(argv):
 
 if __name__ == '__main__':
     main(sys.argv)
-    
-# Prototyping geocode stuff:
-    
-# sql = 'select address,response from geocodes where address = ?'
-# c = conn.cursor()
-# cache = {}
-# address = options.address    
-# for row in c.execute(sql, (address,)):
-#     cache[row[0]] = row[
-# if cache.has_key(address):
-#     logging.info('CACHE HIT: address=%s' % address)
-#     sys.exit(1)
-# logging.info('CACHE MISS: address=%s' % address)
-# params = urllib.urlencode(dict(address=address, sensor='true'))
-# url = 'http://maps.googleapis.com/maps/api/geocode/json?%s' % params
-# response = simplejson.loads(urllib.urlopen(url).read())
-# logging.info('Geocode received from %s' % url)
-# sql = 'insert into geocodes values (?, ?)'
-# cursor = conn.cursor()
-# cursor.execute(sql, (address, simplejson.dumps(response)))
-# conn.commit() 
-   
