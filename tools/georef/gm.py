@@ -164,7 +164,7 @@ class Geomancer(object):
                     geocode = self._google_geocode(feature)
                     Cache.put(key, geocode)
                 loc.feature_geocodes[feature] = geocode 
-                logging.info('Geocogded feature "%s"' % feature)
+                logging.info('Geocoded feature "%s"' % feature)
         return localities
 
     def georeferece(self, location):
