@@ -26,7 +26,7 @@ global verbosity
 verbosity = 1
 
 # Geomancer modules
-from geomancer.parselocality import parse as parseloc
+from geomancer.core import parse_loc as parseloc
 from geomancer.utils import UnicodeDictReader, UnicodeDictWriter, CredentialsPrompt
 from geomancer.cache import Cache
 
