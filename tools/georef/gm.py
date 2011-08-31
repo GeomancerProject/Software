@@ -62,8 +62,9 @@ class Geomancer(object):
         self.predictor = predictor
 
     def predict(self, localities):
-        """Predicts locality type for each locality in a list."""
+        """Predict locality type for each locality in a list."""
         for loc in localities:
+            logging.info('Predicting locality type for "%s"' % loc.name)
             key = 'loctype-%s' % loc.name
             prediction = Cache.get(key)
             if not prediction:
@@ -72,32 +73,34 @@ class Geomancer(object):
                 Cache.put(key, prediction)
             loc.type = prediction['loctype']
             loc.type_scores = prediction['scores']
-            logging.info('PREDICTED %s for "%s"' % (loc.type, loc.name))
+            logging.info('Predicted "%s" for "%s"' % (loc.type, loc.name))
         return localities
 
     def parse(self, localities):
         for loc in localities:
+            logging.info('Parsing "%s" based on locality type "%s"' % (loc.name, loc.type))
             loc.parts = parseloc(loc.name, loc.type)
-            logging.info('PARSED features %s from "%s"' % (list(loc.parts['features']), loc.name))
+            logging.info('Parsed features "%s"' % list(loc.parts['features']))
         return localities
 
     def geocode(self, localities):        
         for loc in localities:
             loc.feature_geocodes = {}
-            for feature in loc.parts['features']:                
+            for feature in loc.parts['features']:              
+                logging.info('Geocoding feature "%s"' % feature)  
                 key = 'geocode-%s' % feature
                 geocode = Cache.get(key)
                 if not geocode:
                     geocode = self._google_geocode(feature)
                     Cache.put(key, geocode)
                 loc.feature_geocodes[feature] = geocode 
-                logging.info('GEOCODED feature "%s"' % feature)
+                logging.info('Geocoded feature "%s"' % feature)
         return localities
 
     def georeferece(self, location):
         """Georeferences a location."""
         localities = Locality.create_muti(location)
-        logging.info('Georeferencing %s - %s' % (location, [x.name for x in localities]))
+        logging.info('Georeferencing "%s" with sub-localities %s' % (location, [x.name for x in localities]))
         localities_predicted = self.predict(localities)
         localities_parsed = self.parse(localities_predicted)
         localities_geocoded = self.geocode(localities_parsed)
@@ -279,8 +282,7 @@ class Gm(object):
 
 
 def main(argv):
-    logging.basicConfig(format=('%(asctime)s %(levelname)s %(filename)s:'
-                                '%(lineno)s %(message)s '))
+    logging.basicConfig(format=('%(asctime)s %(levelname)s: %(message)s'))
     try:
         result = Gm(argv).Run()
         if result:
