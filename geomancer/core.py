@@ -32,7 +32,6 @@ from point import *
 
 # Geomancer modules
 from cache import Cache
-from prediction import PredictionApi
 from utils import UnicodeDictReader, UnicodeDictWriter, CredentialsPrompt
 
 # Standard Python modules
@@ -65,8 +64,9 @@ class Locality(object):
         return str(self.__dict__)
 
 class Geomancer(object):
-    def __init__(self, predictor):
+    def __init__(self, predictor, geocoder):
         self.predictor = predictor
+        self.geocoder = geocoder
 
     def predict(self, localities):
         """Predict locality type for each locality in a list."""
@@ -98,7 +98,7 @@ class Geomancer(object):
                 key = 'geocode-%s' % feature
                 geocode = Cache.get(key)
                 if not geocode:
-                    geocode = self._google_geocode(feature)
+                    geocode = self.geocoder.geocode(feature)
                     Cache.put(key, geocode)
                 loc.feature_geocodes[feature] = geocode 
                 logging.info('Geocoded feature "%s"' % feature)

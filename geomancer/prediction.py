@@ -29,7 +29,7 @@ from oauth2client.client import AccessTokenRefreshError
 from oauth2client.client import OAuth2WebServerFlow
 from oauth2client.tools import run
       
-class PredictionApi(object):
+class GooglePredictionApi(object):
 
     """Class for locality type prediction based on the Google Prediction API."""
 

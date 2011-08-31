@@ -23,7 +23,8 @@ verbosity = 1
 
 # Geomancer modules
 from geomancer.core import Geomancer, Locality
-from geomancer.prediction import PredictionApi
+from geomancer.prediction import GooglePredictionApi
+from geomancer.geocoding import GoogleGeocodingApi
 
 # Standard Python modules
 import httplib2
@@ -154,8 +155,8 @@ class Gm(object):
         else:
             host = self.options.host
         config = yaml.load(open(self.options.config_file, 'r'))        
-        predictor = PredictionApi(config['model'], config['client_id'], config['client_secret'])
-        geomancer = Geomancer(predictor)
+        predictor = GooglePredictionApi(config['model'], config['client_id'], config['client_secret'])
+        geomancer = Geomancer(predictor, GoogleGeocodingApi)
         results = geomancer.georef(self.options.address)  
         return results
 
