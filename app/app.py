@@ -37,7 +37,7 @@ from google.appengine.datastore import entity_pb
 # Datastore Plus imports
 from ndb import query
 
-from geomancer.gm.bb import BoundingBox
+from geomancer.bb import BoundingBox
 
 from models import Feature, FeatureIndex
 try:

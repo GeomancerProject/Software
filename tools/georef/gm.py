@@ -26,9 +26,9 @@ global verbosity
 verbosity = 1
 
 # Geomancer modules
-from cache import Cache
-from localities import Locality, PredictionApi
-from utils import UnicodeDictReader, UnicodeDictWriter, CredentialsPrompt
+from geomancer.parselocality import parse as parseloc
+from geomancer.utils import UnicodeDictReader, UnicodeDictWriter, CredentialsPrompt
+from geomancer.cache import Cache
 
 # Standard Python modules
 import cgi
@@ -54,39 +54,131 @@ from oauth2client.client import AccessTokenRefreshError
 from oauth2client.client import OAuth2WebServerFlow
 from oauth2client.tools import run
         
+class PredictionApi(object):
+
+    """Class for locality type prediction based on the Google Prediction API."""
+
+    def __init__(self, config):
+        self.config = config
+        self._set_flow()
+
+    def get_type(self, query):
+        storage = Storage('prediction.dat')
+        credentials = storage.get()
+        if credentials is None or credentials.invalid:
+            self._set_flow()
+            credntials = run(self.FLOW, storage)
+        http = httplib2.Http()
+        http = credentials.authorize(http)
+        service = build("prediction", "v1.3", http=http)
+        try:
+            train = service.training()
+            body = {'input': {'csvInstance': [query]}}
+            prediction = train.predict(body=body, data=self.config['model']).execute()
+            json_content = prediction
+            scores = []
+            if json_content.has_key('outputLabel'):
+                predict = json_content['outputLabel']
+                scores = self._format_results(json_content['outputMulti'])
+            else:
+                predict = json_content['outputValue']
+            logging.info('Predicted %s for %s' % (predict, query))
+            return [predict, scores]
+        except AccessTokenRefreshError:
+            print ("The credentials have been revoked or expired, please re-run"
+                   "the application to re-authorize")
+
+    def _set_flow(self):
+        self.FLOW = OAuth2WebServerFlow(
+            client_id=self.config['client_id'],
+            client_secret=self.config['client_secret'],
+            scope='https://www.googleapis.com/auth/prediction',
+            user_agent='geomancer/1.0')
+
+    def _format_results(self, jsonscores):
+        scores = {}
+        for pair in jsonscores:
+            for key, value in pair.iteritems():
+                if key == 'label':
+                    label = value
+                elif key == 'score':
+                    score = value
+            scores[label] = score
+        return scores
+
+class Locality(object):
+    """Class representing a sub-locality."""
+    
+    @classmethod
+    def create_muti(cls, location):
+        """Return list of Locality objects by splitting location on ',' and ';'."""
+        return [Locality(name.strip()) for name in set(reduce(            
+                    lambda x,y: x+y, 
+                    [x.split(';') for x in location.split(',')]))]
+
+    def __init__(self, name):
+        self.name = name
+        self.type = None
+        self.type_scores = None
+        self.parts = {}
+        self.features = set()
+    
+    def __repr__(self):
+        return str(self.__dict__)
+
 class Geomancer(object):
     """Class for georeferencing addresses."""
-    def __init__(self, cache, predictor):
-        self.cache = cache
+    def __init__(self, predictor):
         self.predictor = predictor
 
     def predict(self, localities):
-        """Predicts locality type for each locality in a list."""
+        """Predict locality type for each locality in a list."""
         for loc in localities:
-            # Check cache for loctype
-            hit = self.cache.get_loctype(loc.name)
-            if not hit:
-                # Get predicted loctype and update chace
+            logging.info('Predicting locality type for "%s"' % loc.name)
+            key = 'loctype-%s' % loc.name
+            prediction = Cache.get(key)
+            if not prediction:
                 loctype, scores = self.predictor.get_type(loc.name)
-                hit = dict(locname=loc.name, loctype=loctype, scores=scores)
-                self.cache.put_loctype(hit)
-            # Set loctype
-            loc.type = hit['loctype']
+                prediction = dict(locname=loc.name, loctype=loctype, scores=scores)
+                Cache.put(key, prediction)
+            loc.type = prediction['loctype']
+            loc.type_scores = prediction['scores']
+            logging.info('Predicted "%s" for "%s"' % (loc.type, loc.name))
+        return localities
 
+    def parse(self, localities):
+        for loc in localities:
+            logging.info('Parsing "%s" based on locality type "%s"' % (loc.name, loc.type))
+            loc.parts = parseloc(loc.name, loc.type)
+            logging.info('Parsed features "%s"' % list(loc.parts['features']))
+        return localities
+
+    def geocode(self, localities):        
+        for loc in localities:
+            loc.feature_geocodes = {}
+            for feature in loc.parts['features']:              
+                logging.info('Geocoding feature "%s"' % feature)  
+                key = 'geocode-%s' % feature
+                geocode = Cache.get(key)
+                if not geocode:
+                    geocode = self._google_geocode(feature)
+                    Cache.put(key, geocode)
+                loc.feature_geocodes[feature] = geocode 
+                logging.info('Geocoded feature "%s"' % feature)
         return localities
 
     def georeferece(self, location):
         """Georeferences a location."""
         localities = Locality.create_muti(location)
-        logging.info('Georeferencing %s - %s' % (location, [x.name for x in localities]))
-        localities_with_type = self.predict(localities)
-        if len(localities_with_type) == 0:
-            # Prediction fail
-            logging.info('Unable to georeference %s (locality types unknown)' % location)
-            return None
-        for loc in localities_with_type:
-            logging.info('"%s" -> %s' % (loc.name, loc.type))
-        #localities_parsed = self.parse(localities_with_type)
+        logging.info('Georeferencing "%s" with sub-localities %s' % (location, [x.name for x in localities]))
+        localities_predicted = self.predict(localities)
+        localities_parsed = self.parse(localities_predicted)
+        localities_geocoded = self.geocode(localities_parsed)
+
+    def _google_geocode(self, address):
+        params = urllib.urlencode(dict(address=address, sensor='true'))
+        url = 'http://maps.googleapis.com/maps/api/geocode/json?%s' % params
+        return simplejson.loads(urllib.urlopen(url).read())
 
 def PrintUpdate(msg):
     if verbosity > 0:
@@ -181,6 +273,9 @@ class Gm(object):
         try:
             self.action(self)
         except Exception as e:
+            import traceback
+            traceback.print_tb(sys.exc_info()[2])
+            logging.info(e)
             raise e
         return 0
 
@@ -204,10 +299,9 @@ class Gm(object):
             host = 'localhost:8080'
         else:
             host = self.options.host
-        cache = Cache(host)
         config = yaml.load(open(self.options.config_file, 'r'))        
-        predictor = PredictionApi(config, cache)
-        geomancer = Geomancer(cache, predictor)
+        predictor = PredictionApi(config)
+        geomancer = Geomancer(predictor)
         results = geomancer.georeferece(self.options.address)  
         return results
 
@@ -258,8 +352,7 @@ class Gm(object):
 
 
 def main(argv):
-    logging.basicConfig(format=('%(asctime)s %(levelname)s %(filename)s:'
-                                '%(lineno)s %(message)s '))
+    logging.basicConfig(format=('%(asctime)s %(levelname)s: %(message)s'))
     try:
         result = Gm(argv).Run()
         if result:

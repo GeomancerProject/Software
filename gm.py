@@ -29,11 +29,12 @@ if version_tuple < (2, 4):
   sys.exit(1)
 
 DIR_PATH = os.path.abspath(os.path.dirname(os.path.realpath(__file__)))
-SCRIPT_DIR = os.path.join(DIR_PATH, 'geomancer', 'tools', 'georef')
+SCRIPT_DIR = os.path.join(DIR_PATH, 'tools', 'georef')
 
 EXTRA_PATHS = [
   DIR_PATH,
   SCRIPT_DIR,
+  os.path.join(DIR_PATH, 'geomancer'),
   os.path.join(DIR_PATH, 'lib', 'google_appengine'),
   os.path.join(DIR_PATH, 'lib', 'google_appengine', 'lib', 'antlr3'),
   os.path.join(DIR_PATH, 'lib', 'google_appengine', 'lib', 'django_0_96'),
