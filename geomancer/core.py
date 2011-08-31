@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Copyright 2011 University of California at Berkeley
+# Copyright 2011 The Regents of the University of California 
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,9 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-__author__ = "Aaron Steele and John Wieczorek"
+__author__ = "John Wieczorek (gtuco.btuco@gmail.com)"
+__copyright__ = "Copyright 2011 The Regents of the University of California"
+__contributors__ = ["Aaron Steele (eightysteele@gmail.com)"]
 
-"""This module provides classes for calculating georeferencing errors."""
+"""This module provides core functions and classes for georeferencing"""
 
 import math
 import logging
@@ -27,6 +29,94 @@ from constants import Datums
 from constants import Headings
 from bb import BoundingBox
 from point import *
+
+# Geomancer modules
+from cache import Cache
+from prediction import PredictionApi
+from utils import UnicodeDictReader, UnicodeDictWriter, CredentialsPrompt
+
+# Standard Python modules
+import httplib2
+import logging
+import optparse
+import simplejson
+import sys
+import urllib
+import yaml
+
+class Locality(object):
+    """Class representing a sub-locality."""
+    
+    @classmethod
+    def create_muti(cls, location):
+        """Return list of Locality objects by splitting location on ',' and ';'."""
+        return [Locality(name.strip()) for name in set(reduce(            
+                    lambda x,y: x+y, 
+                    [x.split(';') for x in location.split(',')]))]
+
+    def __init__(self, name):
+        self.name = name
+        self.type = None
+        self.type_scores = None
+        self.parts = {}
+        self.features = set()
+    
+    def __repr__(self):
+        return str(self.__dict__)
+
+class Geomancer(object):
+    def __init__(self, predictor):
+        self.predictor = predictor
+
+    def predict(self, localities):
+        """Predict locality type for each locality in a list."""
+        for loc in localities:
+            logging.info('Predicting locality type for "%s"' % loc.name)
+            key = 'loctype-%s' % loc.name
+            prediction = Cache.get(key)
+            if not prediction:
+                loctype, scores = self.predictor.get_type(loc.name)
+                prediction = dict(locname=loc.name, loctype=loctype, scores=scores)
+                Cache.put(key, prediction)
+            loc.type = prediction['loctype']
+            loc.type_scores = prediction['scores']
+            logging.info('Predicted "%s" for "%s"' % (loc.type, loc.name))
+        return localities
+
+    def parse(self, localities):
+        for loc in localities:
+            logging.info('Parsing "%s" based on locality type "%s"' % (loc.name, loc.type))
+            loc.parts = parse_loc(loc.name, loc.type)
+            logging.info('Parsed features "%s"' % list(loc.parts['features']))
+        return localities
+
+    def geocode(self, localities):        
+        for loc in localities:
+            loc.feature_geocodes = {}
+            for feature in loc.parts['features']:              
+                logging.info('Geocoding feature "%s"' % feature)  
+                key = 'geocode-%s' % feature
+                geocode = Cache.get(key)
+                if not geocode:
+                    geocode = self._google_geocode(feature)
+                    Cache.put(key, geocode)
+                loc.feature_geocodes[feature] = geocode 
+                logging.info('Geocoded feature "%s"' % feature)
+        return localities
+
+    def georef(self, location):
+        """Georeferences a location."""
+        localities = Locality.create_muti(location)
+        logging.info('Georeferencing "%s" with sub-localities %s' % (location, [x.name for x in localities]))
+        localities_predicted = self.predict(localities)
+        localities_parsed = self.parse(localities_predicted)
+        localities_geocoded = self.geocode(localities_parsed)
+
+    def _google_geocode(self, address):
+        params = urllib.urlencode(dict(address=address, sensor='true'))
+        url = 'http://maps.googleapis.com/maps/api/geocode/json?%s' % params
+        return simplejson.loads(urllib.urlopen(url).read())
+
 
 """A_WGS84 is the radius of the sphere at the equator for the WGS84 datum."""
 A_WGS84 = 6378137.0
@@ -152,25 +242,6 @@ def is_number(s):
         return True
     except ValueError:
         return False    
-
-class Locality(object):
-    
-    def __init__(self, loc, loctype=None, parts={}, geocode=None):
-        """Constructs a Locality.
-    
-        Arguments:
-            loc - The string locality (required)
-            loctype - The string locality type abbreviation
-            parts - A dictionary containing locality parts based on type
-            geocode - The raw Google Geocode API response object
-        """
-        self.loc = loc
-        self.loctype = loctype
-        self.parts = parts
-        self.geocode = geocode
-
-    def __str__(self):
-        return str(self.__dict__)
 
 class GeocodeResultParser(object):
     @classmethod
