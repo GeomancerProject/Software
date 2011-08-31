@@ -34,6 +34,8 @@ SCRIPT_DIR = os.path.join(DIR_PATH, 'geomancer', 'tools', 'georef')
 EXTRA_PATHS = [
   DIR_PATH,
   SCRIPT_DIR,
+  os.path.join(DIR_PATH, 'geomancer'),
+  os.path.join(DIR_PATH, 'geomancer', 'gm'),
   os.path.join(DIR_PATH, 'lib', 'google_appengine'),
   os.path.join(DIR_PATH, 'lib', 'google_appengine', 'lib', 'antlr3'),
   os.path.join(DIR_PATH, 'lib', 'google_appengine', 'lib', 'django_0_96'),
