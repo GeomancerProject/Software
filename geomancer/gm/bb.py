@@ -1,64 +1,24 @@
 #!/usr/bin/env python
 
+# Copyright 2011 University of California at Berkeley
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+__author__ = "Aaron Steele and John Wieczorek"
+
 import logging
+from point import *
 from optparse import OptionParser
-
-class Point(object):
-    """A degree-based geographic coordinate independent of a coordinate reference system."""
-
-    def __init__(self, lng, lat):
-        self._lng = lng
-        self._lat = lat
-
-    def get_lng(self):
-        return self._lng
-    lng = property(get_lng)
-
-    def get_lat(self):
-        return self._lat
-    lat = property(get_lat)
-
-    def isvalid(self):
-        if math.fabs(self.lat) <= 90:
-            if math.fabs(self.lng) <= 180:
-                return True
-        return False
-
-    def __str__(self):
-        return str(self.__dict__)
-
-    def __eq__(self, other):
-        if not isinstance(other, Point):
-            return NotImplemented
-        if self.lat != other.lat:
-            return NotImplemented
-        if self.lng != other.lng:
-            return NotImplemented
-        return True
-
-    def __gt__(self, other):
-        if self._lat > other._lat:
-            return True
-        if self._lng > other._lng:
-            return True
-        return False
-
-    def __lt__(self, other):
-        if self._lat < other._lat:
-            return True
-        if self._lng < other._lng:
-            return True
-        return False
-
-    def __cmp__(self, other):
-        if self.__gt__(other):
-            return 1
-        if self.__lt__(other):
-            return -1
-        return 0
-
-    def __hash__(self):
-        return hash('%s,%s' % (self._lat, self._lng))
 
 class BoundingBox(object):
     """A degree-based geographic bounding box independent of a coordinate reference system."""
@@ -182,6 +142,10 @@ class BoundingBox(object):
         if e is None:
             return None
         return BoundingBox(Point(w,n),Point(e,s))
+    
+    def calc_radius(self):
+        """Returns a radius in meters from the center to the farthest corner of the bounding box."""
+        return haversine_distance(se, nw)/2.0
             
 def is_lng_between(lng, west_lng, east_lng):
     '''
@@ -221,14 +185,6 @@ def lng_distance(west_lng, east_lng):
         return 360 + e - w
     '''w and e both in eastern hemisphere with w west or e.'''
     return e - w
-
-def lng180(lng):
-    '''Given a longitude in degrees, returns a longitude in degrees between {-180, 180].'''
-    if lng <= -180:
-        return lng + 360
-    elif lng > 180:
-        return lng - 360
-    return lng
 
 def _getoptions():
     """Parses command line options and returns them."""
