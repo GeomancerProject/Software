@@ -22,7 +22,6 @@ __contributors__ = ["John Wieczorek (gtuco.btuco@gmail.com)"]
 
 # Geomancer modules
 from utils import UnicodeDictReader, UnicodeDictWriter
-from cache import Cache
 
 # Standard Python modules
 import cgi
@@ -63,9 +62,8 @@ class PredictionApi(object):
 
     """Class for locality type prediction based on the Google Prediction API."""
 
-    def __init__(self, config, cache):
+    def __init__(self, config):
         self.config = config
-        self.cache = cache
         self._set_flow()
 
     def get_type(self, query):

@@ -31,7 +31,7 @@ import sys
 import urllib
     
 # Setup local cache
-CREATE_SQL = 'create table if not exists cache (key text, value text)'
+CREATE_SQL = 'create table if not exists cache (key text primary key, value text)'
 GET_SQL = 'select value from cache where key = ?'
 PUT_SQL = 'insert into cache (key, value) values (?, ?)'
 CONN = sqlite3.connect('gm.cache.sqlite3.db', check_same_thread=False)

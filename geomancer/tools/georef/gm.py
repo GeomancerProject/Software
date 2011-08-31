@@ -56,20 +56,19 @@ from oauth2client.tools import run
         
 class Geomancer(object):
     """Class for georeferencing addresses."""
-    def __init__(self, cache, predictor):
-        self.cache = cache
+    def __init__(self, predictor):
         self.predictor = predictor
 
     def predict(self, localities):
         """Predicts locality type for each locality in a list."""
         for loc in localities:
             # Check cache for loctype
-            hit = self.cache.get_loctype(loc.name)
+            hit = Cache.get(loc.name)
             if not hit:
                 # Get predicted loctype and update chace
                 loctype, scores = self.predictor.get_type(loc.name)
                 hit = dict(locname=loc.name, loctype=loctype, scores=scores)
-                self.cache.put_loctype(hit)
+                Cache.put(loc.name, hit)
             # Set loctype
             loc.type = hit['loctype']
 
@@ -181,6 +180,9 @@ class Gm(object):
         try:
             self.action(self)
         except Exception as e:
+            import traceback
+            traceback.print_tb(sys.exc_info()[2])
+            logging.info(e)
             raise e
         return 0
 
@@ -204,10 +206,9 @@ class Gm(object):
             host = 'localhost:8080'
         else:
             host = self.options.host
-        cache = Cache(host)
         config = yaml.load(open(self.options.config_file, 'r'))        
-        predictor = PredictionApi(config, cache)
-        geomancer = Geomancer(cache, predictor)
+        predictor = PredictionApi(config)
+        geomancer = Geomancer(predictor)
         results = geomancer.georeferece(self.options.address)  
         return results
 
