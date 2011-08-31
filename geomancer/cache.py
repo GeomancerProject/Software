@@ -140,6 +140,7 @@ class Cache(object):
 
     @classmethod
     def get(cls, key):
+        key = cls._clean_key(key)
         value = LocalCache.get(key)
         if value:
             logging.info('CACHE-LOCAL-HIT: "%s"' % key)
@@ -154,6 +155,11 @@ class Cache(object):
     
     @classmethod
     def put(cls, key, value):
+        key = cls._clean_key(key)
         logging.info('CACHE-UPDATE: %s' % key)
         LocalCache.put(key, value)
         RemoteCache.put(key, value)
+
+    @classmethod
+    def _clean_key(cls, key):
+        return key.lower().strip()
