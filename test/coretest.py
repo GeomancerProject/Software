@@ -23,8 +23,8 @@ import sys
 # Hack to get ../gm on sys.paht
 sys.path.append('../')
 
-from gm.core import *
-from gm import constants
+from geomancer.core import *
+from geomancer import constants
 
 import math
 import logging
