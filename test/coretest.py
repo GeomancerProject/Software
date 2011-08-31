@@ -111,7 +111,7 @@ class TestGeomancer(unittest.TestCase):
        ],
        "status" : "OK"
     }""")
-        logging.info(georef_feature(geocode))
+#        logging.info(georef_feature(geocode))
 
     def test_point2wgs84(self):
         agd66point = Point(144.966666667, -37.8)
