@@ -13,7 +13,6 @@ googlekey
 
 # Logs and databases #
 ######################
-*.csv
 *.log
 *.sql
 *.sqlite3.db
