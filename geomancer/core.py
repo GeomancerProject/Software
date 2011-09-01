@@ -126,6 +126,7 @@ def loc_georefs(localities):
     georef_lists=[]
     for loc in localities:
         georefs =  subloc_georefs(loc)
+        loc.georefs = georefs
         georef_lists.append(georefs)
     ''' Now we have a list of lists of georefs, and we need to find intersecting combos.'''
     results=georef_lists.pop()

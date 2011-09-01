@@ -166,27 +166,27 @@ class Gm(object):
         geomancer = Geomancer(predictor, GoogleGeocodingApi, cache_remote_host=host)
         locality = self.options.address
         localities, georefs = geomancer.georef(locality)
-        logging.info('Georefs %s' % georefs)
+        logging.info('Georefs %s' % [x.to_kml() for x in georefs])
         if self.options.export:
             self.Export(locality, georefs, localities, client_id, client_secret)
         return localities
 
     def Export(self, locality, georefs, localities, client_id, client_secret):
         temp_file = tempfile.NamedTemporaryFile()
-        writer = UnicodeDictWriter(temp_file.name, ['locality', 'type', 'feature', 'georefs'])
+        writer = UnicodeDictWriter(temp_file.name, [u'locality', u'type', u'feature', u'georefs'])
         writer.writeheader()     
         # Write final georef
         writer.writerow(dict(
                 locality=locality,
                 type='',
-                features='',
-                georefs=''.join([x.to_kml() for x in georefs])))
+                feature='',
+                georefs=''.join([unicode(x.to_kml()) for x in georefs])))
         # Write sub-locality georefs
         for loc in localities:
             row = dict(
                 locality=loc.name,
                 type=loc.type,
-                features=','.join(loc.parts['features']),
+                feature=','.join(loc.parts['features']),
                 georefs=' '.join([x.to_kml() for x in loc.georefs]))
             writer.writerow(row)            
         # Export to Fusion Table
