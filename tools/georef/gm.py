@@ -171,19 +171,22 @@ class Gm(object):
         return localities
 
     def Export(self, locality, localities, client_id, client_secret):
+        polygon = """<Polygon> <outerBoundaryIs>
+<coordinates> -117.85,35.3 -117.85,35.301 -117.851,35.301 -117.851,35.3 -117.85,35.3 </coordinates>
+</outerBoundaryIs> </Polygon>"""
         temp_file = tempfile.NamedTemporaryFile()
-        writer = UnicodeDictWriter(temp_file.name, ['locality', 'type', 'features', 'georefs'])
+        writer = UnicodeDictWriter(temp_file.name, ['locality', 'type', 'feature', 'georefs'])
         writer.writeheader()        
         for loc in localities:
             row = dict(
                 locality=loc.name,
                 type=loc.type,
                 features=','.join(loc.parts['features']),
-                georefs='')
+                georefs=polygon)
             writer.writerow(row)            
         exporter = GoogleFusionTablesApi(client_id, client_secret)
         tablename = '-'.join([loc.name for loc in localities])
-        tableid = exporter.export(temp_file.name, locality, ['STRING', 'STRING', 'LOCATION', 'STRING'])
+        tableid = exporter.export(temp_file.name, locality, ['STRING', 'STRING', 'STRING', 'LOCATION'])
         tableurl = 'http://www.google.com/fusiontables/DataSource?dsrcid=%s' % tableid
         logging.info('Georefs exported to Google Fusion Tables: %s' % tableurl)
         return tableurl
