@@ -19,6 +19,7 @@ googlekey
 *.sqlite
 bulkloader-log*
 bulkloader-progress*
+.svn
 
 # IDE files #
 #############
