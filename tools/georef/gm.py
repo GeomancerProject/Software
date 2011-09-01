@@ -23,8 +23,10 @@ verbosity = 1
 
 # Geomancer modules
 from geomancer.core import Geomancer, Locality
-from geomancer.prediction import GooglePredictionApi
+from geomancer.exporting import GoogleFusionTablesApi
 from geomancer.geocoding import GoogleGeocodingApi
+from geomancer.prediction import GooglePredictionApi
+from geomancer.utils import UnicodeDictReader, UnicodeDictWriter
 
 # Standard Python modules
 import httplib2
@@ -32,6 +34,7 @@ import logging
 import optparse
 import simplejson
 import sys
+import tempfile
 import urllib
 import yaml
 
@@ -62,6 +65,8 @@ def _GeoreferenceOptions(self, parser):
                       help='Number of records to pst in each request.')                          
     parser.add_option('-l', '--localhost', dest='localhost', action='store_true', 
                       help='Shortcut for bulkloading to http://localhost:8080/_ah/remote_api')                          
+    parser.add_option('-e', '--export', dest='export', action='store_true', 
+                      help='Export georeferences to Google Fusion Tables')                          
 
 class Action(object):
     """Contains information about a command line action."""
@@ -155,10 +160,33 @@ class Gm(object):
         else:
             host = self.options.host
         config = yaml.load(open(self.options.config_file, 'r'))        
-        predictor = GooglePredictionApi(config['model'], config['client_id'], config['client_secret'])
+        client_id = config['client_id']
+        client_secret = config['client_secret']
+        predictor = GooglePredictionApi(config['model'], client_id, client_secret)
         geomancer = Geomancer(predictor, GoogleGeocodingApi, cache_remote_host=host)
-        results = geomancer.georef(self.options.address)  
-        return results
+        locality = self.options.address
+        localities = geomancer.georef(locality)
+        if self.options.export:
+            self.Export(locality, localities, client_id, client_secret)
+        return localities
+
+    def Export(self, locality, localities, client_id, client_secret):
+        temp_file = tempfile.NamedTemporaryFile()
+        writer = UnicodeDictWriter(temp_file.name, ['locality', 'type', 'features', 'georefs'])
+        writer.writeheader()        
+        for loc in localities:
+            row = dict(
+                locality=loc.name,
+                type=loc.type,
+                features=','.join(loc.parts['features']),
+                georefs='')
+            writer.writerow(row)            
+        exporter = GoogleFusionTablesApi(client_id, client_secret)
+        tablename = '-'.join([loc.name for loc in localities])
+        tableid = exporter.export(temp_file.name, locality, ['STRING', 'STRING', 'LOCATION', 'STRING'])
+        tableurl = 'http://www.google.com/fusiontables/DataSource?dsrcid=%s' % tableid
+        logging.info('Georefs exported to Google Fusion Tables: %s' % tableurl)
+        return tableurl
 
     def _PrintHelpAndExit(self, exit_code=2):
         """Prints the parser's help message and exits the program."""
