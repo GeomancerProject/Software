@@ -25,6 +25,6 @@ import urllib
 class GoogleGeocodingApi(object):
     @classmethod
     def geocode(cls, address):
-        params = urllib.urlencode(dict(address=address, sensor='false'))
+        params = urllib.urlencode(dict(address=address, sensor='true'))
         url = 'http://maps.googleapis.com/maps/api/geocode/json?%s' % params
         return simplejson.loads(urllib.urlopen(url).read())
