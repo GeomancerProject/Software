@@ -425,7 +425,14 @@ class TestGeomancer(unittest.TestCase):
         loc_c['feature_geocodes'] = GeocodeResultParser.get_feature_geoms(c, test_response_ca)
         final_georefs = loc_georefs(localities)
         pass
-    
+
+    def test_bb_kml(self):
+        nw = Point(-117.851,35.301)
+        se = Point(-117.85,35.3)
+        bb = BoundingBox(nw,se)
+        kml = bb.to_kml()
+        pass
+
 def get_example_geocode():
     """Returns an Google Geocoding JSON response for "Mountain View"."""
     geocode = simplejson.loads("""{

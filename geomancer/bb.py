@@ -56,10 +56,11 @@ class BoundingBox(object):
 
     def to_kml(self):
         polygon = '<Polygon><outerBoundaryIs><coordinates>%s</coordinates></outerBoundaryIs></Polygon>'
-        
-        # TODO John
-        coords = '-117.85,35.3 -117.85,35.301 -117.851,35.301 -117.851,35.3 -117.85,35.3' 
-
+        n = self.get_n()
+        s = self.get_s()
+        e = self.get_e()
+        w = self.get_w()
+        coords = '%s,%s %s,%s %s,%s %s,%s %s,%s' % (w,n,w,s,e,s,e,n,w,n)
         return polygon % coords
 
     @classmethod
