@@ -126,9 +126,14 @@ def loc_georefs(localities):
     georef_lists=[]
     for loc in localities:
         georefs =  subloc_georefs(loc)
-        loc.georefs = georefs
-        georef_lists.append(georefs)
+        # TODO: Decide what to do if any sublocality returns no georefs. For now, ignore that locality.
+        # Minimally, if we do this, we have to change the interpreted locality.
+        if len(georefs) > 0:
+            loc.georefs = georefs
+            georef_lists.append(georefs)
     ''' Now we have a list of lists of georefs, and we need to find intersecting combos.'''
+    if len(georef_lists) == 0:
+        return None
     results=georef_lists.pop()
     while len(georef_lists) > 0:
         next_georefs = georef_lists.pop()
@@ -144,40 +149,27 @@ def loc_georefs(localities):
 
 
 def subloc_georefs(loc):
+    if not loc.parts.has_key('feature_geocodes'):
+        return None
     geocodes = loc.parts['feature_geocodes']
+    if len(geocodes) == 0:
+        return None
     loctype = loc.type
     georefs=[]
     for feature, geocode in geocodes.iteritems():
         geocodes = GeocodeResultParser.get_feature_geoms(feature, geocode)
-        for g in geocodes:
-            if loctype == 'f':
-                bb = GeometryParser.get_bb(g)
-                georefs.append(bb)
-            elif loctype == 'foh':
-                bb = GeometryParser.get_bb(g)
-                offset = loc.parts['offset_value']
-                offsetunit = loc.parts['offset_unit']
-                heading = loc.parts['heading'] 
-                new_bb = foh_error_bb(bb, offset, offsetunit, heading)
-                georefs.append(new_bb)
-    return georefs
-
-
-def subloc_georefs_(parts):
-    geocodes = parts['feature_geocodes'] # dictionary mapping feature names to verbatim google geocode
-    loctype = parts['locality_type']
-    georefs=[]
-    for geocode in geocodes:
-        if loctype == 'f':
-            bb = GeometryParser.get_bb(geocode)
-            georefs.append(bb)
-        elif loctype == 'foh':
-            bb = GeometryParser.get_bb(geocode)
-            offset = parts['offset_value']
-            offsetunit = parts['offset_unit']
-            heading = parts['heading'] 
-            new_bb = foh_error_bb(bb, offset, offsetunit, heading)
-            georefs.append(new_bb)
+        if geocodes is not None:
+            for g in geocodes:
+                if loctype == 'f':
+                    bb = GeometryParser.get_bb(g)
+                    georefs.append(bb)
+                elif loctype == 'foh':
+                    bb = GeometryParser.get_bb(g)
+                    offset = loc.parts['offset_value']
+                    offsetunit = loc.parts['offset_unit']
+                    heading = loc.parts['heading'] 
+                    new_bb = foh_error_bb(bb, offset, offsetunit, heading)
+                    georefs.append(new_bb)
     return georefs
  
 def parse_loc(loc, loctype):
