@@ -64,11 +64,10 @@ class Locality(object):
         return str(self.__dict__)
     
 class Geomancer(object):
-    def __init__(self, predictor, geocoder, cache_remote_host=None):
+    def __init__(self, predictor, geocoder, creds=None, cache_remote_host=None):
         self.predictor = predictor
         self.geocoder = geocoder
-        if cache_remote_host:
-            Cache.config(remote_host=cache_remote_host)        
+        Cache.config(creds=creds, remote_host=cache_remote_host)        
 
     def georef(self, location):
         """Georeferences a location."""

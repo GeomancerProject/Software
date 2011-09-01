@@ -160,18 +160,23 @@ class Gm(object):
         else:
             host = self.options.host
         config = yaml.load(open(self.options.config_file, 'r'))        
+        creds = (config['email'], config['password'])
         client_id = config['client_id']
         client_secret = config['client_secret']
-        predictor = GooglePredictionApi(config['model'], client_id, client_secret)
-        geomancer = Geomancer(predictor, GoogleGeocodingApi, cache_remote_host=host)
+        predictor = GooglePredictionApi(config['model'], client_id, client_secret)        
+        geomancer = Geomancer(predictor, GoogleGeocodingApi, creds=creds, cache_remote_host=host)
         locality = self.options.address
         localities, georefs = geomancer.georef(locality)
         logging.info('Georefs %s' % [x.to_kml() for x in georefs])
         if self.options.export:
-            self.Export(locality, georefs, localities, client_id, client_secret)
+            if len(georefs) > 0:
+                self.Export(locality, georefs, localities, client_id, client_secret)
+            else: 
+                logging.info('No georefs to export')
         return localities
 
     def Export(self, locality, georefs, localities, client_id, client_secret):
+        logging.info('Exporting georefs to Fusion Table')
         temp_file = tempfile.NamedTemporaryFile()
         writer = UnicodeDictWriter(temp_file.name, [u'locality', u'type', u'feature', u'georefs'])
         writer.writeheader()     
@@ -182,13 +187,13 @@ class Gm(object):
                 feature='',
                 georefs=''.join([unicode(x.to_kml()) for x in georefs])))
         # Write sub-locality georefs
-        for loc in localities:
-            row = dict(
-                locality=loc.name,
-                type=loc.type,
-                feature=','.join(loc.parts['features']),
-                georefs=' '.join([x.to_kml() for x in loc.georefs]))
-            writer.writerow(row)            
+        # for loc in localities:
+        #     row = dict(
+        #         locality=loc.name,
+        #         type=loc.type,
+        #         feature=','.join(loc.parts['features']),
+        #         georefs=' '.join([x.to_kml() for x in loc.georefs]))
+        #     writer.writerow(row)            
         # Export to Fusion Table
         exporter = GoogleFusionTablesApi(client_id, client_secret)
         tablename = '-'.join([loc.name for loc in localities])

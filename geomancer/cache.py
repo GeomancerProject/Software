@@ -30,6 +30,10 @@ import sqlite3
 import sys
 import urllib
     
+# Credentials
+EMAIL = None
+PASSWD = None
+
 # Setup local cache
 CREATE_SQL = 'create table if not exists cache (key text primary key, value text)'
 GET_SQL = 'select value from cache where key = ?'
@@ -49,9 +53,12 @@ def _setup_local(filename):
 def _setup_remote(host=HOST):
     global HOST
     global SERVER
+    global EMAIL
+    global PASSWD
     HOST = host
-    email, passwd = CredentialsPrompt('the Geomancer remote cache at %s' % HOST)
-    SERVER = AppEngine(HOST, email, passwd)
+    if not EMAIL or not PASSWD:
+        EMAIL, PASSWD = CredentialsPrompt('the Geomancer remote cache at %s' % HOST)        
+    SERVER = AppEngine(HOST, EMAIL, PASSWD)
 
 def _assert_key(key):
     assert key is not None
@@ -132,7 +139,11 @@ class Cache(object):
     """Cache for locality types and geocodes from local and remote storage."""
 
     @classmethod
-    def config(cls, remote_host=None, local_filename=None):
+    def config(cls, creds=None, remote_host=None, local_filename=None):
+        global EMAIL
+        global PASSWD
+        if creds:
+            EMAIL, PASSWD = creds
         if remote_host:
             _setup_remote(remote_host)
         if local_filename:
