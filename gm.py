@@ -46,6 +46,7 @@ EXTRA_PATHS = [
   os.path.join(DIR_PATH, 'lib', 'google_appengine', 'lib', 'simplejson'),
   os.path.join(DIR_PATH, 'lib', 'google_appengine', 'lib', 'graphy'),
   os.path.join(DIR_PATH, 'lib', 'google-api-python-client'),
+  os.path.join(DIR_PATH, 'lib', 'fusion-tables-client-python', 'src'),
   os.path.join(DIR_PATH, 'app'),
 ]
 

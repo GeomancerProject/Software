@@ -62,13 +62,22 @@ class Locality(object):
     
     def __repr__(self):
         return str(self.__dict__)
-
+    
 class Geomancer(object):
     def __init__(self, predictor, geocoder, cache_remote_host=None):
         self.predictor = predictor
         self.geocoder = geocoder
         if cache_remote_host:
             Cache.config(remote_host=cache_remote_host)        
+
+    def georef(self, location):
+        """Georeferences a location."""
+        localities = Locality.create_muti(location)
+        logging.info('Georeferencing "%s" with sub-localities %s' % (location, [x.name for x in localities]))
+        localities_predicted = self.predict(localities)
+        localities_parsed = self.parse(localities_predicted)
+        localities_geocoded = self.geocode(localities_parsed)
+        return localities_geocoded
 
     def predict(self, localities):
         """Predict locality type for each locality in a list."""
@@ -105,19 +114,6 @@ class Geomancer(object):
                 loc.feature_geocodes[feature] = geocode 
                 logging.info('Geocoded feature "%s"' % feature)
         return localities
-
-    def georef(self, location):
-        """Georeferences a location."""
-        localities = Locality.create_muti(location)
-        logging.info('Georeferencing "%s" with sub-localities %s' % (location, [x.name for x in localities]))
-        localities_predicted = self.predict(localities)
-        localities_parsed = self.parse(localities_predicted)
-        localities_geocoded = self.geocode(localities_parsed)
-
-    def _google_geocode(self, address):
-        params = urllib.urlencode(dict(address=address, sensor='true'))
-        url = 'http://maps.googleapis.com/maps/api/geocode/json?%s' % params
-        return simplejson.loads(urllib.urlopen(url).read())
 
 def parse_loc(loc, loctype):
    parts={}
