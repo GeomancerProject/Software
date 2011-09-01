@@ -149,7 +149,7 @@ class BoundingBox(object):
     
     def calc_radius(self):
         """Returns a radius in meters from the center to the farthest corner of the bounding box."""
-        return haversine_distance(se, nw)/2.0
+        return self.se.haversine_distance(self.nw)/2.0
             
 def is_lng_between(lng, west_lng, east_lng):
     '''
