@@ -165,25 +165,31 @@ class Gm(object):
         predictor = GooglePredictionApi(config['model'], client_id, client_secret)
         geomancer = Geomancer(predictor, GoogleGeocodingApi, cache_remote_host=host)
         locality = self.options.address
-        localities = geomancer.georef(locality)
+        localities, georefs = geomancer.georef(locality)
+        logging.info('Georefs %s' % georefs)
         if self.options.export:
-            self.Export(locality, localities, client_id, client_secret)
+            self.Export(locality, georefs, localities, client_id, client_secret)
         return localities
 
-    def Export(self, locality, localities, client_id, client_secret):
-        polygon = """<Polygon> <outerBoundaryIs>
-<coordinates> -117.85,35.3 -117.85,35.301 -117.851,35.301 -117.851,35.3 -117.85,35.3 </coordinates>
-</outerBoundaryIs> </Polygon>"""
+    def Export(self, locality, georefs, localities, client_id, client_secret):
         temp_file = tempfile.NamedTemporaryFile()
         writer = UnicodeDictWriter(temp_file.name, ['locality', 'type', 'feature', 'georefs'])
-        writer.writeheader()        
+        writer.writeheader()     
+        # Write final georef
+        writer.writerow(dict(
+                locality=locality,
+                type='',
+                features='',
+                georefs=''.join([x.to_kml() for x in georefs])))
+        # Write sub-locality georefs
         for loc in localities:
             row = dict(
                 locality=loc.name,
                 type=loc.type,
                 features=','.join(loc.parts['features']),
-                georefs=polygon)
+                georefs=' '.join([x.to_kml() for x in loc.georefs]))
             writer.writerow(row)            
+        # Export to Fusion Table
         exporter = GoogleFusionTablesApi(client_id, client_secret)
         tablename = '-'.join([loc.name for loc in localities])
         tableid = exporter.export(temp_file.name, locality, ['STRING', 'STRING', 'STRING', 'LOCATION'])

@@ -70,19 +70,15 @@ class Geomancer(object):
         if cache_remote_host:
             Cache.config(remote_host=cache_remote_host)        
 
-    def georef(self, localities):
-        for loc in localities:
-            loc.feature_geocodes = {}
-            for feature in loc.parts['features']:              
-                logging.info('Geocoding feature "%s"' % feature)  
-                key = 'geocode-%s' % feature
-                geocode = Cache.get(key)
-                if not geocode:
-                    geocode = self.geocoder.geocode(feature)
-                    Cache.put(key, geocode)
-                loc.feature_geocodes[feature] = geocode 
-                logging.info('Geocoded feature "%s"' % feature)
-        return localities
+    def georef(self, location):
+        """Georeferences a location."""
+        localities = Locality.create_muti(location)
+        logging.info('Georeferencing "%s" with sub-localities %s' % (location, [x.name for x in localities]))
+        localities_predicted = self.predict(localities)
+        localities_parsed = self.parse(localities_predicted)
+        localities_geocoded = self.geocode(localities_parsed)
+        localities_calculated, georefs = self.calculate(localities_geocoded)
+        return (localities_geocoded, georefs)
 
     def predict(self, localities):
         """Predict locality type for each locality in a list."""
@@ -109,6 +105,7 @@ class Geomancer(object):
     def geocode(self, localities):
         for loc in localities:
             loc.feature_geocodes = {}
+            loc.parts['feature_geocodes'] = {}
             for feature in loc.parts['features']:              
                 logging.info('Geocoding feature "%s"' % feature)  
                 key = 'geocode-%s' % feature
@@ -116,11 +113,16 @@ class Geomancer(object):
                 if not geocode:
                     geocode = self.geocoder.geocode(feature)
                     Cache.put(key, geocode)
-                loc.feature_geocodes[feature] = geocode 
+                loc.parts['feature_geocodes'][feature] = geocode 
                 logging.info('Geocoded feature "%s"' % feature)
         return localities
 
+    def calculate(self, localities):
+        georefs = loc_georefs(localities)
+        return (localities, georefs)
+
 def loc_georefs(localities):
+    """localities is a list of Locality."""
     georef_lists=[]
     for loc in localities:
         georefs =  subloc_georefs(loc)
@@ -138,8 +140,30 @@ def loc_georefs(localities):
         results = new_results
     return results
                 
-def subloc_georefs(parts):
-    geocodes = parts['feature_geocodes']
+
+
+def subloc_georefs(loc):
+    geocodes = loc.parts['feature_geocodes']
+    loctype = loc.type
+    georefs=[]
+    for feature, geocode in geocodes.iteritems():
+        geocodes = GeocodeResultParser.get_feature_geoms(feature, geocode)
+        for g in geocodes:
+            if loctype == 'f':
+                bb = GeometryParser.get_bb(g)
+                georefs.append(bb)
+            elif loctype == 'foh':
+                bb = GeometryParser.get_bb(g)
+                offset = loc.parts['offset_value']
+                offsetunit = loc.parts['offset_unit']
+                heading = loc.parts['heading'] 
+                new_bb = foh_error_bb(bb, offset, offsetunit, heading)
+                georefs.append(new_bb)
+    return georefs
+
+
+def subloc_georefs_(parts):
+    geocodes = parts['feature_geocodes'] # dictionary mapping feature names to verbatim google geocode
     loctype = parts['locality_type']
     georefs=[]
     for geocode in geocodes:
