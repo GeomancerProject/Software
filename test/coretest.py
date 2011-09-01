@@ -47,72 +47,6 @@ class TestGeomancer(unittest.TestCase):
         for datum in datums:
             logging.info(datum)
 
-    def test_georef(self):
-        geocode = simplejson.loads("""{
-       "results" : [
-          {
-             "address_components" : [
-                {
-                   "long_name" : "Mountain View",
-                   "short_name" : "Mountain View",
-                   "types" : [ "locality", "political" ]
-                },
-                {
-                   "long_name" : "San Jose",
-                   "short_name" : "San Jose",
-                   "types" : [ "administrative_area_level_3", "political" ]
-                },
-                {
-                   "long_name" : "Santa Clara",
-                   "short_name" : "Santa Clara",
-                   "types" : [ "administrative_area_level_2", "political" ]
-                },
-                {
-                   "long_name" : "California",
-                   "short_name" : "CA",
-                   "types" : [ "administrative_area_level_1", "political" ]
-                },
-                {
-                   "long_name" : "United States",
-                   "short_name" : "US",
-                   "types" : [ "country", "political" ]
-                }
-             ],
-             "formatted_address" : "Mountain View, CA, USA",
-             "geometry" : {
-                "bounds" : {
-                   "northeast" : {
-                      "lat" : 37.4698870,
-                      "lng" : -122.0446720
-                   },
-                   "southwest" : {
-                      "lat" : 37.35654100000001,
-                      "lng" : -122.1178620
-                   }
-                },
-                "location" : {
-                   "lat" : 37.38605170,
-                   "lng" : -122.08385110
-                },
-                "location_type" : "APPROXIMATE",
-                "viewport" : {
-                   "northeast" : {
-                      "lat" : 37.42150620,
-                      "lng" : -122.01982140
-                   },
-                   "southwest" : {
-                      "lat" : 37.35058040,
-                      "lng" : -122.14788080
-                   }
-                }
-             },
-             "types" : [ "locality", "political" ]
-          }
-       ],
-       "status" : "OK"
-    }""")
-#        logging.info(georef_feature(geocode))
-
     def test_point2wgs84(self):
         agd66point = Point(144.966666667, -37.8)
         wgs84point = agd66point.point2wgs84(Datums.AGD84)
@@ -294,7 +228,7 @@ class TestGeomancer(unittest.TestCase):
         self.assertEqual(truncate(60.0000000001,0), '60')
         self.assertEqual(truncate(60.0000000001,4), '60')
         self.assertEqual(truncate(0.9666666667,4), '0.9667')
-    
+
     def test_has_num(self):
         self.assertEqual(has_num('6'), 0)
         self.assertEqual(has_num('km'), None)
@@ -475,6 +409,23 @@ class TestGeomancer(unittest.TestCase):
         self.assertEqual(p['status'],'complete')
         self.assertEqual(p['features'][0],'Gaastra')
        
+    def test_final_georef(self):
+        localities = []
+        loc_b = parse_loc('5 mi SW Berkeley', 'foh')
+        loc_a = parse_loc('Alameda County', 'f')
+        loc_c = parse_loc('CA', 'f')
+        localities.append(loc_a)
+        localities.append(loc_b)
+        localities.append(loc_c)
+        a = loc_a['features'][0].strip(' County')
+        b = loc_b['features'][0]
+        c = loc_c['features'][0]
+        loc_a['feature_geocodes'] = GeocodeResultParser.get_feature_geoms(a, test_response_alameda)
+        loc_b['feature_geocodes'] = GeocodeResultParser.get_feature_geoms(b, test_response_berkeley)
+        loc_c['feature_geocodes'] = GeocodeResultParser.get_feature_geoms(c, test_response_ca)
+        final_georefs = loc_georefs(localities)
+        pass
+    
 def get_example_geocode():
     """Returns an Google Geocoding JSON response for "Mountain View"."""
     geocode = simplejson.loads("""{
@@ -541,6 +492,396 @@ def get_example_geocode():
    "status" : "OK"
 }""")
     return geocode
+
+test_response_ca = {
+   "results" : [
+      {
+         "address_components" : [
+            {
+               "long_name" : "California",
+               "short_name" : "CA",
+               "types" : [ "administrative_area_level_1", "political" ]
+            },
+            {
+               "long_name" : "United States",
+               "short_name" : "US",
+               "types" : [ "country", "political" ]
+            }
+         ],
+         "formatted_address" : "California, USA",
+         "geometry" : {
+            "bounds" : {
+               "northeast" : {
+                  "lat" : 42.00951690,
+                  "lng" : -114.1312110
+               },
+               "southwest" : {
+                  "lat" : 32.5288320,
+                  "lng" : -124.4820030
+               }
+            },
+            "location" : {
+               "lat" : 36.7782610,
+               "lng" : -119.41793240
+            },
+            "location_type" : "APPROXIMATE",
+            "viewport" : {
+               "northeast" : {
+                  "lat" : 41.21563630,
+                  "lng" : -111.22213140
+               },
+               "southwest" : {
+                  "lat" : 32.06836610,
+                  "lng" : -127.61373340
+               }
+            }
+         },
+         "types" : [ "administrative_area_level_1", "political" ]
+      }
+   ],
+   "status" : "OK"
+}
+
+test_response_alameda = {
+   "results" : [
+      {
+         "address_components" : [
+            {
+               "long_name" : "Alameda",
+               "short_name" : "Alameda",
+               "types" : [ "administrative_area_level_2", "political" ]
+            },
+            {
+               "long_name" : "California",
+               "short_name" : "CA",
+               "types" : [ "administrative_area_level_1", "political" ]
+            },
+            {
+               "long_name" : "United States",
+               "short_name" : "US",
+               "types" : [ "country", "political" ]
+            }
+         ],
+         "formatted_address" : "Alameda, California, USA",
+         "geometry" : {
+            "bounds" : {
+               "northeast" : {
+                  "lat" : 37.90582390,
+                  "lng" : -121.4692140
+               },
+               "southwest" : {
+                  "lat" : 37.45453890,
+                  "lng" : -122.3737820
+               }
+            },
+            "location" : {
+               "lat" : 37.60168920,
+               "lng" : -121.71954590
+            },
+            "location_type" : "APPROXIMATE",
+            "viewport" : {
+               "northeast" : {
+                  "lat" : 37.8840360,
+                  "lng" : -121.20730830
+               },
+               "southwest" : {
+                  "lat" : 37.31826680,
+                  "lng" : -122.23178350
+               }
+            }
+         },
+         "types" : [ "administrative_area_level_2", "political" ]
+      }
+   ],
+   "status" : "OK"
+}
+
+test_response_berkeley = {
+   "results" : [
+      {
+         "address_components" : [
+            {
+               "long_name" : "Berkeley",
+               "short_name" : "Berkeley",
+               "types" : [ "locality", "political" ]
+            },
+            {
+               "long_name" : "Alameda",
+               "short_name" : "Alameda",
+               "types" : [ "administrative_area_level_2", "political" ]
+            },
+            {
+               "long_name" : "California",
+               "short_name" : "CA",
+               "types" : [ "administrative_area_level_1", "political" ]
+            },
+            {
+               "long_name" : "United States",
+               "short_name" : "US",
+               "types" : [ "country", "political" ]
+            }
+         ],
+         "formatted_address" : "Berkeley, CA, USA",
+         "geometry" : {
+            "bounds" : {
+               "northeast" : {
+                  "lat" : 37.90582390,
+                  "lng" : -122.2341790
+               },
+               "southwest" : {
+                  "lat" : 37.8357270,
+                  "lng" : -122.3677810
+               }
+            },
+            "location" : {
+               "lat" : 37.87159260,
+               "lng" : -122.2727470
+            },
+            "location_type" : "APPROXIMATE",
+            "viewport" : {
+               "northeast" : {
+                  "lat" : 37.90681610,
+                  "lng" : -122.20871730
+               },
+               "southwest" : {
+                  "lat" : 37.83635220,
+                  "lng" : -122.33677670
+               }
+            }
+         },
+         "types" : [ "locality", "political" ]
+      },
+      {
+         "address_components" : [
+            {
+               "long_name" : "Berkeley",
+               "short_name" : "Berkeley",
+               "types" : [ "locality", "political" ]
+            },
+            {
+               "long_name" : "Ocean",
+               "short_name" : "Ocean",
+               "types" : [ "administrative_area_level_2", "political" ]
+            },
+            {
+               "long_name" : "New Jersey",
+               "short_name" : "NJ",
+               "types" : [ "administrative_area_level_1", "political" ]
+            },
+            {
+               "long_name" : "United States",
+               "short_name" : "US",
+               "types" : [ "country", "political" ]
+            }
+         ],
+         "formatted_address" : "Berkeley, NJ, USA",
+         "geometry" : {
+            "bounds" : {
+               "northeast" : {
+                  "lat" : 39.9873730,
+                  "lng" : -74.07674290
+               },
+               "southwest" : {
+                  "lat" : 39.756830,
+                  "lng" : -74.3292630
+               }
+            },
+            "location" : {
+               "lat" : 39.89719960,
+               "lng" : -74.18271190
+            },
+            "location_type" : "APPROXIMATE",
+            "viewport" : {
+               "northeast" : {
+                  "lat" : 39.9873730,
+                  "lng" : -74.07674290
+               },
+               "southwest" : {
+                  "lat" : 39.756830,
+                  "lng" : -74.3292630
+               }
+            }
+         },
+         "types" : [ "locality", "political" ]
+      },
+      {
+         "address_components" : [
+            {
+               "long_name" : "Holiday City-Berkeley",
+               "short_name" : "Holiday City-Berkeley",
+               "types" : [ "locality", "political" ]
+            },
+            {
+               "long_name" : "Ocean",
+               "short_name" : "Ocean",
+               "types" : [ "administrative_area_level_2", "political" ]
+            },
+            {
+               "long_name" : "New Jersey",
+               "short_name" : "NJ",
+               "types" : [ "administrative_area_level_1", "political" ]
+            },
+            {
+               "long_name" : "United States",
+               "short_name" : "US",
+               "types" : [ "country", "political" ]
+            }
+         ],
+         "formatted_address" : "Holiday City-Berkeley, NJ, USA",
+         "geometry" : {
+            "bounds" : {
+               "northeast" : {
+                  "lat" : 39.9873730,
+                  "lng" : -74.2403250
+               },
+               "southwest" : {
+                  "lat" : 39.9415410,
+                  "lng" : -74.3224790
+               }
+            },
+            "location" : {
+               "lat" : 39.96457970,
+               "lng" : -74.27075090
+            },
+            "location_type" : "APPROXIMATE",
+            "viewport" : {
+               "northeast" : {
+                  "lat" : 39.9873730,
+                  "lng" : -74.2403250
+               },
+               "southwest" : {
+                  "lat" : 39.9415410,
+                  "lng" : -74.3224790
+               }
+            }
+         },
+         "types" : [ "locality", "political" ]
+      },
+      {
+         "address_components" : [
+            {
+               "long_name" : "Berkeley",
+               "short_name" : "Berkeley",
+               "types" : [ "locality", "political" ]
+            },
+            {
+               "long_name" : "Proviso",
+               "short_name" : "Proviso",
+               "types" : [ "administrative_area_level_3", "political" ]
+            },
+            {
+               "long_name" : "Cook",
+               "short_name" : "Cook",
+               "types" : [ "administrative_area_level_2", "political" ]
+            },
+            {
+               "long_name" : "Illinois",
+               "short_name" : "IL",
+               "types" : [ "administrative_area_level_1", "political" ]
+            },
+            {
+               "long_name" : "United States",
+               "short_name" : "US",
+               "types" : [ "country", "political" ]
+            }
+         ],
+         "formatted_address" : "Berkeley, IL, USA",
+         "geometry" : {
+            "bounds" : {
+               "northeast" : {
+                  "lat" : 41.899830,
+                  "lng" : -87.89541290
+               },
+               "southwest" : {
+                  "lat" : 41.87309590,
+                  "lng" : -87.92061090
+               }
+            },
+            "location" : {
+               "lat" : 41.88891940,
+               "lng" : -87.90339560
+            },
+            "location_type" : "APPROXIMATE",
+            "viewport" : {
+               "northeast" : {
+                  "lat" : 41.899830,
+                  "lng" : -87.89541290
+               },
+               "southwest" : {
+                  "lat" : 41.87309590,
+                  "lng" : -87.92061090
+               }
+            }
+         },
+         "types" : [ "locality", "political" ]
+      },
+      {
+         "address_components" : [
+            {
+               "long_name" : "Berkeley",
+               "short_name" : "Berkeley",
+               "types" : [ "locality", "political" ]
+            },
+            {
+               "long_name" : "Norwood",
+               "short_name" : "Norwood",
+               "types" : [ "administrative_area_level_3", "political" ]
+            },
+            {
+               "long_name" : "St Louis",
+               "short_name" : "St Louis",
+               "types" : [ "administrative_area_level_2", "political" ]
+            },
+            {
+               "long_name" : "Missouri",
+               "short_name" : "MO",
+               "types" : [ "administrative_area_level_1", "political" ]
+            },
+            {
+               "long_name" : "United States",
+               "short_name" : "US",
+               "types" : [ "country", "political" ]
+            },
+            {
+               "long_name" : "63145",
+               "short_name" : "63145",
+               "types" : [ "postal_code" ]
+            }
+         ],
+         "formatted_address" : "Berkeley, MO 63145, USA",
+         "geometry" : {
+            "bounds" : {
+               "northeast" : {
+                  "lat" : 38.773750,
+                  "lng" : -90.3105690
+               },
+               "southwest" : {
+                  "lat" : 38.7197740,
+                  "lng" : -90.3533350
+               }
+            },
+            "location" : {
+               "lat" : 38.75449520,
+               "lng" : -90.33122560
+            },
+            "location_type" : "APPROXIMATE",
+            "viewport" : {
+               "northeast" : {
+                  "lat" : 38.773750,
+                  "lng" : -90.3105690
+               },
+               "southwest" : {
+                  "lat" : 38.7197740,
+                  "lng" : -90.3533350
+               }
+            }
+         },
+         "types" : [ "locality", "political" ]
+      }
+   ],
+   "status" : "OK"
+}
+
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)

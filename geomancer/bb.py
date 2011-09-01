@@ -19,6 +19,7 @@ __author__ = "Aaron Steele and John Wieczorek"
 import logging
 from point import *
 from optparse import OptionParser
+import math
 
 class BoundingBox(object):
     """A degree-based geographic bounding box independent of a coordinate reference system."""
@@ -151,9 +152,12 @@ class BoundingBox(object):
             return None
         return BoundingBox(Point(w,n),Point(e,s))
     
+    def center(self):
+        return great_circle_midpoint(self.nw,self.se)
+    
     def calc_radius(self):
         """Returns a radius in meters from the center to the farthest corner of the bounding box."""
-        return haversine_distance(se, nw)/2.0
+        return self.se.haversine_distance(self.nw)/2.0
             
 def is_lng_between(lng, west_lng, east_lng):
     '''
@@ -193,6 +197,30 @@ def lng_distance(west_lng, east_lng):
         return 360 + e - w
     '''w and e both in eastern hemisphere with w west or e.'''
     return e - w
+
+def bb_from_pr(center,radius):
+    n = center.get_point_from_distance_at_bearing(radius,0)
+    e = center.get_point_from_distance_at_bearing(radius,90)
+    s = center.get_point_from_distance_at_bearing(radius,180)
+    w = center.get_point_from_distance_at_bearing(radius,270)
+    nw = Point(w.lng,n.lat)
+    se = Point(e.lng,s.lat)
+    return BoundingBox(nw,se)
+
+def great_circle_midpoint(p0,p1):
+    """
+    Return the midpoint of two ends of the great circle route between two lat, lngs. Orientation matters - p0 should be west of p1.
+    """
+    lat1 = math.radians(p0.lat)
+    lat2 = math.radians(p1.lat)
+    lng1 = math.radians(p0.lng)
+    lng2 = math.radians(p1.lng)
+    dlng = lng2 - lng1
+    bx = math.cos(lat2) * math.cos(dlng)
+    by = math.cos(lat2) * math.sin(dlng)
+    lat3 = math.atan2(math.sin(lat1) + math.sin(lat2), math.sqrt( (math.cos(lat1) + bx) * (math.cos(lat1)+bx) + by*by) ) 
+    lng3 = lng1 + math.atan2(by, math.cos(lat1) + bx)
+    return Point(math.degrees(lng3),math.degrees(lat3))
 
 def _getoptions():
     """Parses command line options and returns them."""

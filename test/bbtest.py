@@ -24,10 +24,25 @@ import unittest
 
 sys.path.insert(0, '../')
 
-from gm.bb import BoundingBox
-from gm.point import *
+from geomancer.bb import BoundingBox
+from geomancer.point import *
 
 class BBTest(unittest.TestCase):
+    def test_center(self):
+        nwcorner = Point(0, 0)
+        secorner = Point(10, 0)
+        bb=BoundingBox(nwcorner,secorner)
+        center=bb.center()
+        self.assertEqual(center.lat,0)
+        self.assertEqual(float(truncate(center.lng,DEGREE_DIGITS)),5)
+        
+        nwcorner = Point(0, 10)
+        secorner = Point(10, 0)
+        bb=BoundingBox(nwcorner,secorner)
+        center=bb.center()
+        self.assertEqual(float(truncate(center.lat,DEGREE_DIGITS)),5.0190007)
+        self.assertEqual(float(truncate(center.lng,DEGREE_DIGITS)),5.0383688)
+
     def test_intersection(self):
         bb0=BoundingBox.create(0,10,10,0)
         bb1=BoundingBox.create(5,15,15,5)

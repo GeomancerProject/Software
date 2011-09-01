@@ -27,7 +27,7 @@ import simplejson
 from constants import DistanceUnits
 #from constants import Datums
 from constants import Headings
-from bb import BoundingBox
+from bb import *
 from point import *
 
 # Geomancer modules
@@ -58,7 +58,7 @@ class Locality(object):
         self.type = None
         self.type_scores = None
         self.parts = {}
-        self.features = set()
+        self.georefs = []
     
     def __repr__(self):
         return str(self.__dict__)
@@ -70,14 +70,19 @@ class Geomancer(object):
         if cache_remote_host:
             Cache.config(remote_host=cache_remote_host)        
 
-    def georef(self, location):
-        """Georeferences a location."""
-        localities = Locality.create_muti(location)
-        logging.info('Georeferencing "%s" with sub-localities %s' % (location, [x.name for x in localities]))
-        localities_predicted = self.predict(localities)
-        localities_parsed = self.parse(localities_predicted)
-        localities_geocoded = self.geocode(localities_parsed)
-        return localities_geocoded
+    def georef(self, localities):
+        for loc in localities:
+            loc.feature_geocodes = {}
+            for feature in loc.parts['features']:              
+                logging.info('Geocoding feature "%s"' % feature)  
+                key = 'geocode-%s' % feature
+                geocode = Cache.get(key)
+                if not geocode:
+                    geocode = self.geocoder.geocode(feature)
+                    Cache.put(key, geocode)
+                loc.feature_geocodes[feature] = geocode 
+                logging.info('Geocoded feature "%s"' % feature)
+        return localities
 
     def predict(self, localities):
         """Predict locality type for each locality in a list."""
@@ -101,7 +106,7 @@ class Geomancer(object):
             logging.info('Parsed features "%s"' % list(loc.parts['features']))
         return localities
 
-    def geocode(self, localities):        
+    def geocode(self, localities):
         for loc in localities:
             loc.feature_geocodes = {}
             for feature in loc.parts['features']:              
@@ -115,6 +120,41 @@ class Geomancer(object):
                 logging.info('Geocoded feature "%s"' % feature)
         return localities
 
+def loc_georefs(localities):
+    georef_lists=[]
+    for loc in localities:
+        georefs =  subloc_georefs(loc)
+        georef_lists.append(georefs)
+    ''' Now we have a list of lists of georefs, and we need to find intersecting combos.'''
+    results=georef_lists.pop()
+    while len(georef_lists) > 0:
+        next_georefs = georef_lists.pop()
+        for result in results:
+            new_results=[]
+            for next_georef in next_georefs:
+                new_result=result.intersection(next_georef)
+                if new_result is not None:
+                    new_results.append(new_result)
+        results = new_results
+    return results
+                
+def subloc_georefs(parts):
+    geocodes = parts['feature_geocodes']
+    loctype = parts['locality_type']
+    georefs=[]
+    for geocode in geocodes:
+        if loctype == 'f':
+            bb = GeometryParser.get_bb(geocode)
+            georefs.append(bb)
+        elif loctype == 'foh':
+            bb = GeometryParser.get_bb(geocode)
+            offset = parts['offset_value']
+            offsetunit = parts['offset_unit']
+            heading = parts['heading'] 
+            new_bb = foh_error_bb(bb, offset, offsetunit, heading)
+            georefs.append(new_bb)
+    return georefs
+ 
 def parse_loc(loc, loctype):
    parts={}
    status=''
@@ -124,9 +164,9 @@ def parse_loc(loc, loctype):
            status='No feature'
 
        # Try to construct a Feature from the remainder
-       features=set()
+       features=[]
        feature=loc.strip()
-       features.add(feature)
+       features.append(feature)
        if len(status)==0:
            status='complete'
            interpreted_loc=feature
@@ -134,6 +174,7 @@ def parse_loc(loc, loctype):
            'verbatim_loc': loc,
            'locality_type': loctype,
            'features': features,
+           'feature_geocodes': None,
            'interpreted_loc': interpreted_loc,
            'status': status
            }                
@@ -183,12 +224,12 @@ def parse_loc(loc, loctype):
            status='%s, no feature' % status
 
        # Try to construct a Feature from the remainder
-       features=set()
+       features=[]
        feature=''
        for f in rest:
            feature = ' %s %s' % (feature,f[1])
        feature=feature.strip()
-       features.add(feature)
+       features.append(feature)
        status=status.lstrip(', ')
        if len(status)==0:
            status='complete'
@@ -200,6 +241,7 @@ def parse_loc(loc, loctype):
            'offset_unit': offsetunit,
            'heading': heading,
            'features': features,
+           'feature_geocodes': None,
            'interpreted_loc': interpreted_loc,
            'status': status
            }                
@@ -233,20 +275,20 @@ def is_number(s):
 
 class GeocodeResultParser(object):
     @classmethod
-    def get_status(cls, object):
-        if not object.has_key('status'):
+    def get_status(cls, geocode):
+        if not geocode.has_key('status'):
             return None
-        return (object.get('status'))
+        return geocode.get('status')
 
     @classmethod
-    def get_feature_geoms(cls, featurename, object):
-        if not object.has_key('status'):
+    def get_feature_geoms(cls, featurename, geocode):
+        if not geocode.has_key('status'):
             return None
-        if object.get('status')!='OK':
+        if geocode.get('status')!='OK':
             return None
-        if not object.has_key('results'):
+        if not geocode.has_key('results'):
             return None
-        results = object.get('results')
+        results = geocode.get('results')
         geoms = []
         feature_sought = None
         for result in results:
@@ -275,21 +317,9 @@ class GeometryParser(object):
         elif geometry.has_key('location'):
             center = Point(geometry['location']['lng'], geometry['location']['lat'])
             if geometry.get('location_type') == 'ROOFTOP':
-                extent=100 # default radius ROOFTOP type
-                n = center.get_point_from_distance_at_bearing(extent,0)
-                e = center.get_point_from_distance_at_bearing(extent,90)
-                s = center.get_point_from_distance_at_bearing(extent,180)
-                w = center.get_point_from_distance_at_bearing(extent,270)
-                nw = Point(w.lng,n.lat)
-                se = Point(e.lng,s.lat)
+                return bb_from_pr(center,100) # default radius ROOFTOP type
             else: # location_type other than ROOFTOP and no bounds
-                extent=1000 
-                n = center.get_point_from_distance_at_bearing(extent,0)
-                e = center.get_point_from_distance_at_bearing(extent,90)
-                s = center.get_point_from_distance_at_bearing(extent,180)
-                w = center.get_point_from_distance_at_bearing(extent,270)
-                nw = Point(w.lng,n.lat)
-                se = Point(e.lng,s.lat)
+                return bb_from_pr(center,1000)
         return BoundingBox(nw,se)
     
 class PaperMap(object):
@@ -382,24 +412,24 @@ def get_heading(headingstr):
                 return heading
     return None
 
-def georef_feature(geocode):
-    """Returns a Georeference from the Geomancer API.
-        Arguments:
-            geocode - a Maps API JSON response for a feature
-    """
-    if not geocode:
-        return None
-    status = geocode.get('status')
-    if status != 'OK':
-        # Geocode failed, no results, no georeference possible.
-        return None
-    if geocode.get('results')[0].has_key('geometry') == False:
-        # First result has no geometry, no georeference possible.
-        return None
-    g = geocode.get('results')[0].get('geometry')
-    point = GeocodeResultParser.get_point(g)
-    error = GeocodeResultParser.calc_radius(g)
-    return Georeference(point, error)
+#def georef_feature(geocode):
+#    """Returns a Georeference from the Geomancer API.
+#        Arguments:
+#            geocode - a Maps API JSON response for a feature
+#    """
+#    if not geocode:
+#        return None
+#    status = geocode.get('status')
+#    if status != 'OK':
+#        # Geocode failed, no results, no georeference possible.
+#        return None
+#    if geocode.get('results')[0].has_key('geometry') == False:
+#        # First result has no geometry, no georeference possible.
+#        return None
+#    g = geocode.get('results')[0].get('geometry')
+#    point = GeocodeResultParser.get_point(g)
+#    error = GeocodeResultParser.calc_radius(g)
+#    return Georeference(point, error)
 
 #def georeference(locality):
 #    """Returns a Georeference given a Locality.
@@ -425,6 +455,17 @@ def georef_feature(geocode):
 #        offsetinmeters = float(offset) * float(fromunit.tometers)        
 #        newpoint = get_point_from_distance_at_bearing(feature.point, offsetinmeters, bearing)
 #        return Georeference(newpoint, error)
+
+def foh_error_bb(bb, offset, offsetunit, heading):
+    center = bb.center()
+    extent = bb.calc_radius()
+    error = foh_error(center,extent,offset,offsetunit,heading)
+    bearing = float(get_heading(heading).bearing)
+    fromunit = get_unit(offsetunit)
+    offsetinmeters = float(offset) * float(fromunit.tometers)    
+    newpoint = center.get_point_from_distance_at_bearing(offsetinmeters, bearing)
+    newbb = bb_from_pr(newpoint,error)
+    return newbb
 
 def foh_error(point, extent, offsetstr, offsetunits, headingstr):
     """Returns the radius in meters from a Point containing all of the uncertainties
@@ -541,7 +582,4 @@ def getDistancePrecision(distance):
     
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
-#    test_georeference_feature()
-#    test_point_from_dist_at_bearing()
-#    test_haversine_distance()
     
