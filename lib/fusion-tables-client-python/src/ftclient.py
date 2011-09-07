@@ -15,6 +15,12 @@ try:
   import authorization.oauth
 except: pass
 
+import httplib2
+from oauth2client.file import Storage
+from oauth2client.client import AccessTokenRefreshError
+from oauth2client.client import OAuth2WebServerFlow
+from oauth2client.tools import run
+from urllib import urlencode
 
 class FTClient():
   def _get(self, query): pass
@@ -67,29 +73,37 @@ class ClientLoginFTClient(FTClient):
 
 class OAuthFTClient(FTClient):
 
-  def __init__(self, consumer_key, consumer_secret, oauth_token, oauth_token_secret):
+  def __init__(self, consumer_key, consumer_secret):
     self.consumer_key = consumer_key
     self.consumer_secret = consumer_secret
-    self.token = oauth2.Token(oauth_token, oauth_token_secret)
-    
     self.scope = "https://www.google.com/fusiontables/api/query"
+    self._set_flow()
 
+  def _set_flow(self):
+    self.FLOW = OAuth2WebServerFlow(
+      client_id=self.consumer_key,
+      client_secret=self.consumer_secret,
+      scope=self.scope,
+      user_agent="fusion-tables-client-python/1.0")
+    
+  def _authorize(self):
+     storage = Storage("fusion_tables.dat")
+     credentials = storage.get()
+     if credentials is None or credentials.invalid:
+       self._set_flow()
+       credentials = run(self.FLOW, storage)
+     http = httplib2.Http()
+     http = credentials.authorize(http)
+     return http
 
-  def _get(self, query):
-    consumer = oauth2.Consumer(self.consumer_key, self.consumer_secret)
-    client = oauth2.Client(consumer, self.token)
-    resp, content = client.request(uri="%s?%s" % (self.scope, query),
-                         method="GET")
+  def _get(self, query):    
+    url = "%s?%s" % (self.scope, query)    
+    resp, content = self._authorize().request(url, method="GET")                                              
     return content
-
 
   def _post(self, query):
-    consumer = oauth2.Consumer(self.consumer_key, self.consumer_secret)
-    client = oauth2.Client(consumer, self.token)
-    resp, content = client.request(uri=self.scope,
-                                   method="POST",
-                                   body=query)
+    url = self.scope
+    headers = {'Content-type': 'application/x-www-form-urlencoded'}
+    resp, content = self._authorize().request(
+      url, method="POST", body=query, headers=headers)
     return content
-
-
-  

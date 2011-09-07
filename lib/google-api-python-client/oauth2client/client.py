@@ -298,7 +298,6 @@ class OAuth2Credentials(Credentials):
           headers['user-agent'] = self.user_agent + ' ' + headers['user-agent']
         else:
           headers['user-agent'] = self.user_agent
-
       resp, content = request_orig(uri, method, body, headers,
                                    redirections, connection_type)
 

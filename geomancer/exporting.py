@@ -28,11 +28,11 @@ from fileimport.fileimporter import CSVImporter
 
 class GoogleFusionTablesApi(object):
     def __init__(self, consumer_key, consumer_secret):
-        url, token, secret = OAuth().generateAuthorizationURL(consumer_key, consumer_secret, consumer_key)
-        print "Visit this URL in a browser: ", url
-        raw_input("Hit enter after authorization")  
-        token, secret = OAuth().authorize(consumer_key, consumer_secret, token, secret)
-        self.oauth_client = ftclient.OAuthFTClient(consumer_key, consumer_secret, token, secret)
+        #url, token, secret = OAuth().generateAuthorizationURL(consumer_key, consumer_secret, consumer_key)
+        #print "Visit this URL in a browser: ", url
+        #raw_input("Hit enter after authorization")  
+        #token, secret = OAuth().authorize(consumer_key, consumer_secret, token, secret)
+        self.oauth_client = ftclient.OAuthFTClient(consumer_key, consumer_secret)
 
     def export(self, filename, tablename=None, datatypes=None):
         """Creates a new Fusion Table from a filename and returns the table id."""    

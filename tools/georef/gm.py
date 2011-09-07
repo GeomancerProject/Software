@@ -168,7 +168,7 @@ class Gm(object):
         locality = self.options.address
         localities, georefs = geomancer.georef(locality)
         if georefs is not None:
-            logging.info('Georefs %s' % [x.to_kml() for x in georefs])
+            logging.info('Calculated %s georefs' % len(georefs))
         else:
             logging.info('No georefs for %s' % locality)
         if self.options.export:

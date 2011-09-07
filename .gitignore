@@ -2,6 +2,8 @@
 ##################
 production.ini
 
+*.dat
+
 # Google Prediction API #
 ########################
 googlekey

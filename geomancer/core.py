@@ -132,7 +132,7 @@ def loc_georefs(localities):
             georef_lists.append(georefs)
     ''' Now we have a list of lists of georefs, and we need to find intersecting combos.'''
     if len(georef_lists) == 0:
-        return None
+        return []
     results=georef_lists.pop()
     while len(georef_lists) > 0:
         next_georefs = georef_lists.pop()
