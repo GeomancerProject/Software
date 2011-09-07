@@ -21,6 +21,7 @@ __contributors__ = ["John Wieczorek (gtuco.btuco@gmail.com)"]
 # Standard Python modules
 import httplib2
 import logging
+import time
 
 # Google API modules
 from apiclient.discovery import build
@@ -50,6 +51,19 @@ class GooglePredictionApi(object):
         service = build("prediction", "v1.3", http=http)
         try:
             train = service.training()
+            
+            # Ensure model is trained
+            body = dict(id=self.model)
+            start = train.insert(body=body).execute()
+            while True:
+                try:
+                    status = train.get(data=self.model).execute()
+                    logging.info('Locality model is ready for prediction')
+                    break
+                except apiclient.errors.HttpError as error:
+                    logging.info('Training locality model...')
+                    time.sleep(10)
+            
             body = {'input': {'csvInstance': [query]}}
             prediction = train.predict(body=body, data=self.model).execute()
             json_content = prediction
